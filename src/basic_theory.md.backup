@@ -1,0 +1,76 @@
+# Basic Number Theory
+
+## Integer Domain
+
+We will be using integers, and by extension rational numbers, exclusively. Number theory has been extended to other domains, but we won't need that.
+
+A brief synopsis of Number Theory, none of it particularly obscure:
+
+## Divisibility
+
+We say that "a devides b" 
+\\[ a \mid b \\] 
+when integer a devides b cleanly. In other words \\( a \div b \\) is an integer.
+
+More formally, there is an integer "c" so that 
+
+\\[ a \times c = b\\]
+
+### Indivisibility
+
+If a does not divide b, we write
+
+\\[ a \nmid b \\]
+
+For instance, if
+
+\\[ a \mid (b \times c) \quad \text{and} \quad a \nmid b \\]
+then \\[ a \mid c \\]
+
+### Sum
+
+If \\[a \mid (b+c)\\] 
+and \\[a \mid b\\]
+then \\[a \mid c \\]
+
+### Product
+
+if \\[(a \times b) \mid c \\]
+then \\[ a \mid c \quad \text{and} \quad b \mid c \\]
+
+### Euclid's division lemma
+
+given any 2 integers *a*, *b* there are integers *q* and *r* such that
+
+\\[a = q \times b + r  \qquad  \text{where} \quad  0 \le r \lt b \\]
+
+*r* is the remainder.
+
+### Modulus
+Another way of writing this is using *modulus* ( *mod* operator)
+\\[ a = r \mod b \\]
+
+## Primes
+
+Numbers that have no divisors (except themselvs and *1* are __prime__)
+
+### Fundemental theorem of arithmatic
+Every integer has a unique factorization into *primes*. Pretty intuitive, although a formal proof takes some work.
+
+### Greatest Common Divisor
+
+Every pair of integers has a *greatest common divisor*. Formally
+
+\\[ \text{greatest common divisor: } d \mid a \text{ and } d \mid b \\]
+\\[ \text{if } c \mid a \text{ and } c \mid b \quad \text{then } c \mid d \\]
+We typically write:
+\\[ d = (a,b) \\]
+
+### Relatively prime
+
+If *a* and *b* have no factors (primes) in common then they are __relatively prime__. I.e.
+\\[(a,b)=1\\]
+
+
+
+
