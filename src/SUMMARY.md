@@ -1,3 +1,16 @@
 # Summary
-
-- [Chapter 1](./chapter_1.md)
+[Reciprocols](../README.md)
+- [Basic Number Theory](basic_theory.md)
+  - [Rational Sum Condition](rational_sum.md)
+  - [Prime Power Persistence](persistence.md)
+  - [Solution Strategy](strategy.md)
+- [Known cases](known.md)
+  - [Straight Reciprocols](straight.md)
+  - [Even](even.md)
+  - [Odd](odd.md)
+  - [Remainder 0](remainder0.md)
+  - [Remainder 1](remainder1.md)
+  - [Odd Modulus](oddmodulus.md)
+  - [Non Relatively Prime](non_rel.md)
+  - [Even Modulus](evenmodulus.md)
+- [Program](program.md)
