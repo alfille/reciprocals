@@ -8,6 +8,7 @@
   - [Straight Reciprocols](straight.md)
   - [Even](even.md)
   - [Odd](odd.md)
+  - [Modulo Equivalence Classes](modulo.md)
   - [Remainder 0](remainder0.md)
   - [Remainder 1](remainder1.md)
   - [Odd Modulus](oddmodulus.md)

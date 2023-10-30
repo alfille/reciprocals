@@ -24,7 +24,7 @@ Arbitrarily assume \\(e \ge f\\)
 \\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d \times p\^f+c \times b \times p\^e}{b \times d \times p\^{e+f}}\\]
 
 or
-\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}} \tag{C1}\\]
+\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}}\\]
 
 ## Two cases
 
