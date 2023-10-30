@@ -44,7 +44,7 @@ given any 2 integers *a*, *b* there are integers *q* and *r* such that
 
 ### Modulus
 Another way of writing this is using *modulus* ( *mod* operator)
-\\[ a = r \mod b \\]
+\\[ a = r \bmod b \\]
 
 ## Primes
 
