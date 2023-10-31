@@ -1,10 +1,10 @@
-# Reciprocols
+# Reciprocals
 
-Using basic Number Theory, an investigation of sums of reciprocols.
+Using basic Number Theory, an investigation of sums of reciprocals.
 
 ## Question
 
-__*Is the series of partial sums of reciprocols ever an integer?*__
+__*Is the series of partial sums of reciprocals ever an integer?*__
 
 ### Explanation
 
