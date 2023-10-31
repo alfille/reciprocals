@@ -5,4 +5,4 @@ In addition to the original problem \\( \frac{1}{2}+\frac{1}{3}+\frac{1}{4}+\dot
 In every case, we'll use our [strategy](stragegy.md) and
 
 * Choose a *p*
-* So that we can satisfy conditions I, II, III
+* Show that we can satisfy conditions I, II, III

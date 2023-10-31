@@ -2,12 +2,21 @@
 
 ## Rational sum
 
+## Summary
+
+We will show that if a fractions has a prime to a power in the denominator, the sum with another fraction will also have that prime to a power unless:
+
+* the second term has the prime to a higher power (that will win out)
+* the second term has the prime to the same power -- unclear result
+
+## Prime factor
+
 From the [previous section (B1)](rational_sum.md) we know that (for reduced fractions)
 
 \\[\frac{a}{b}+\frac{c}{d}=\frac{a \times d+c \times b}{b \times d}\\]
  is an integer only if \\(b=d\\)
  
-## Prime factor
+---
 
 Choose a number *p* such that
 

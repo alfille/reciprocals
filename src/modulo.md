@@ -91,4 +91,5 @@ The requirement that \\( p\^{e+1}\mid v\_n\\) means
 
 or
 
-\\[k_2\times p = k+m \quad \text{for some}\quad k\_2\gt 0\\]
+\\[ k\_2 \times p = k+m \quad \text{for some} \quad k\_2 \gt 0 \\]
+

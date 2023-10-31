@@ -8,32 +8,35 @@ Choose a *p* so that
 
 \\[ S(n) = \frac{a}{b\times p\^e} \quad \text{where}\quad (a,p)=1\quad\text{and}\quad(b,p)=1\\]
 
-Our strategy is to show that \\(p\^e\\) persists in the denominator and slowly increments.
-
 ## Math Induction
 
-### Condition I
+We will be summing the series \\( 1/v\_1, 1/v\_2,\dots\\) with a test prime *p*
+
+\\[\text{Let}\quad S(n)=1/v\_1+1/v\_2+\dots+1/v\_n\\]
+
+### Condition I - Existence
 
 In the series:
 
-\\[S(1),S(2),\dots\\]
+\\[v\_1,v\_2,\dots\\]
 
-There is a minimal element \\(v\_0\\) where
-\\[p\mid S(v\_0) \tag{Condition I}\\]
+There is a minimal element \\(v\_m\\) where
+\\[p\mid v\_m\\]
 
-### Condition II
+### Condition II - Start
 
-None of the terms:
+None of the terms \\(S(1),\dots,S(v\_{m-1})\\) are integers
 
-\\[S(1),S(2),\dots,S(v\_o) \tag{Condition II}\\]
+Note that \\(S(v\_m)=\frac{a}{p\times b}\\)is non-integer since \\(1/v\_m\\) was the first term with *p* in the denominator.
 
-are integers. (There are a finite number of terms to check.)
+### Condition III Induction
 
-### Condition III
+Suppose that \\(v\_m\\) is the first term where
 
-The next term \\[ \frac{1}{v\_1} \quad \text{where} \quad p\^e \mid v\_1 \quad \text{also allows} \quad p\^{e+1} \mid v\_1 \tag{Condition III}\\]
+\\[p\^e\mid v\_m\quad\text{thus}\\;S(v\_m)=\frac{a}{b\times p\^e}\quad\text{where}\\;p\nmid a,\\; p\nmid b\\]
 
-Thus there is never a cancellation of the highest power of *p*
+Let \\(v\_n\\) be the __next__ term where \\(p\^e\mid v\_n\\)
 
-I.e. There is always an unique factor in the denominator so the rational cannot be an integer.
+Our condition is that \\[p\^{e+1}\mid v\_n\\] 
 
+Thus there is an ever-increasing power of *p* in the denominator of \\(S(1),S(2),\dots\\)

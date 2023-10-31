@@ -2,7 +2,7 @@
 
 ## Rational number
 
-A *rational number* is a fraction of the form \\( \frac{a}{b} \\) where *a* and *b* are positive integers.
+A *rational number* is a fraction of the form \\( a /b \\) where *a* and *b* are positive integers.
 
 ### Reduced form
 
@@ -19,9 +19,9 @@ I.e. *a* and *b* are *relatively prime*
 
 ### Condition for integer
 
-* A __reduced fraction__ \\( \frac{a}{b}\\) is an integer only if \\(b=1\\) . (We are ignoring zero as a numerator or integer).
-* An arbitrary fraction \\( \frac{a}{b}\\) is an integer only if
-\\[ b \mid a \quad \text{, equivalently:} \quad (a,b)=b \\]
+* A __reduced fraction__ \\( a /b\\) is an integer only if \\(b=1\\) . (We are ignoring zero as a numerator)
+* An arbitrary fraction \\( a /b\\) is an integer only if
+\\[ b \mid a \\, \text{,  equivalently:} \quad (a,b)=b \\]
 
 ### Integer sum
 
@@ -29,19 +29,22 @@ The sum:
 
 \\[\frac{a}{b}+\frac{c}{d}=\frac{a \times d+c \times b}{b \times d}\\]
 
-where \\(\frac{a}{b}\\) and \\( \frac{c}{d} \\) are *reduced fractions* I.e.
-\\[(a,b)=1 \quad \text{and} \quad (c,d)=1\\]
 
 can be an integer only if
 \\[{b\times d} \mid (a \times d + c \times b)\\]
 
-From the [previous section](basic_theory.md) we know that that implies
+----
+
+We can be more specific if we know that \\(\frac{a}{b}\\) and \\( \frac{c}{d} \\) are *reduced fractions* I.e.
+\\[(a,b)=1 \quad \text{and} \quad (c,d)=1\\]
+
+From the [previous section (A3)](basic_theory.md) that implies
 \\[{b} \mid (a \times d + c \times b)\\]
 \\[{d} \mid (a \times d + c \times b)\\]
-which implies
+which [implies (A2)](basic_theory.md)
 \\[{b} \mid (a \times d)\\]
 \\[{d} \mid (c \times b)\\]
-Now since \\((a,b)=1 \quad \text{and} \quad (c,d)=1\\)
+Now since \\((a,b)=1 \quad \text{and} \quad (c,d)=1\\) from [(A1)](basic_theory.md)
 \\[{b} \mid d\\]
 \\[{d} \mid b\\]
 Only true if \\(b=d\\)

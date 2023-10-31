@@ -2,6 +2,13 @@
 
 ## Rational sum
 
+## Summary
+
+We will show that if a fractions has a prime to a power in the denominator, the sum with another fraction will also have that prime to a power unless:
+
+* the second term has the prime to a higher power (that will win out)
+* the second term has the prime to the same power -- unclear result
+
 From the [previous section (B1)](rational_sum.md) we know that (for reduced fractions)
 
 \\[\frac{a}{b}+\frac{c}{d}=\frac{a \times d+c \times b}{b \times d}\\]
@@ -24,7 +31,7 @@ Arbitrarily assume \\(e \ge f\\)
 \\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d \times p\^f+c \times b \times p\^e}{b \times d \times p\^{e+f}}\\]
 
 or
-\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}}\\]
+\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}} \tag{C1}\\]
 
 ## Two cases
 
