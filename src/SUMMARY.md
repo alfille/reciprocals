@@ -1,11 +1,11 @@
 # Summary
-[Reciprocols](../README.md)
+[Reciprocals](../README.md)
 - [Basic Number Theory](basic_theory.md)
   - [Rational Sum Condition](rational_sum.md)
   - [Prime Power Persistence](persistence.md)
   - [Solution Strategy](strategy.md)
 - [Known cases](known.md)
-  - [Straight Reciprocols](straight.md)
+  - [Straight Reciprocals](straight.md)
   - [Even](even.md)
   - [Odd](odd.md)
   - [Modulo Equivalence Classes](modulo.md)

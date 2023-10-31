@@ -3,6 +3,6 @@ authors = ["Paul Alfille"]
 language = "en"
 multilingual = false
 src = "src"
-title = "reciprocols"
+title = "reciprocals"
 [output.html]
 mathjax-support = true

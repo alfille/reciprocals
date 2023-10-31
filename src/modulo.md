@@ -1,6 +1,6 @@
 # Modulo Equivalence Classes
 
-Although we've proven the base case: [Straight reciprocol sequence](straight.md) and extended it to [even](even.md) and [odd](odd.md) sequences, there is a more general set of sequences to explore.
+Although we've proven the base case: [Straight reciprocal sequence](straight.md) and extended it to [even](even.md) and [odd](odd.md) sequences, there is a more general set of sequences to explore.
 
 ## Modulo arithmetic
 

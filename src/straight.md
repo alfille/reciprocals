@@ -1,4 +1,4 @@
-# Straight Reciprocols
+# Straight Reciprocals
 
 \\[S(n)=1 /2+1 /3+1 /4+\dots+1 /n\tag{P1}\\]
 
