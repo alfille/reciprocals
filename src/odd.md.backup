@@ -2,16 +2,16 @@
 
 \\[S(n)=\frac{1}{3}+\frac{1}{5}+\frac{1}{7}+\dots+\frac{1}{2 \times n+1}\tag{P1}\\]
 
-* Power 
+* Prime 
 	* \\(p=3\\)
 * Condition I
 	- \\( \lbrace \frac{1}{p\^1}=\frac{1}{3}\rbrace  \mid \lbrace S(1)=\frac{1}{3} \rbrace\\)
 * Condition II
 	- \\(\frac{1}{3}\\) is not an integer
 * Condition III 
-	* for any term \\(3\^e\\) added, the next term with \\(3\^e\\) is \\(2*3\^e\\) 
+	* for any term \\(3\^e\\) added, the next term with \\(3\^e\\) is \\(2 \times 3\^e\\) 
 	* but that is even 
-	* so the next term after that is \\(3*3\^e=3\^{e+1}\\) 
+	* so the next term after that is \\(3 \times 3\^e=3\^{e+1}\\) 
 	
 Term |denominator| \\(ord\_2(term)\\)|\\(ord\_2(S)\\)
 ---|---|---|---|

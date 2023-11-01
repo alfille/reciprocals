@@ -2,14 +2,16 @@
 
 \\[S(n)=1 /2+1 /3+1 /4+\dots+1 /n\tag{P1}\\]
 
-* Power 
+* Prime 
 	* \\(p=2\\)
 * Condition I
 	- \\( \lbrace \frac{1}{p\^1}=1 /2\rbrace  \mid \lbrace S(1)=1 /2 \rbrace\\)
 * Condition II
 	- \\( 1 /2 \\) is not an integer
 * Condition III 
-	* for any term \\(2\^e\\) added, the next term with \\(2\^e\\) is \\(2*2\^e=2\^{e+1}\\)
+	* The first term with \\(2\^e\\) is actually \\(s\^e\\
+	* The next term with \\(2\^e\\) in it is the first multiple \\[2*2\^e=2\^{e+1}\\]
+* Table of terms, demostrating this
 	
 Term |denominator| \\(ord\_2(term)\\)|\\(ord\_2(S)\\)
 ---|---|---|---|

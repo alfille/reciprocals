@@ -9,12 +9,14 @@ We will show that if a fractions has a prime to a power in the denominator, the 
 * the second term has the prime to a higher power (that will win out)
 * the second term has the prime to the same power -- unclear result
 
+## Prime factor
+
 From the [previous section (B1)](rational_sum.md) we know that (for reduced fractions)
 
 \\[\frac{a}{b}+\frac{c}{d}=\frac{a \times d+c \times b}{b \times d}\\]
  is an integer only if \\(b=d\\)
  
-## Prime factor
+---
 
 Choose a number *p* such that
 
@@ -28,10 +30,9 @@ What is
 
 Arbitrarily assume \\(e \ge f\\)
 
-\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d \times p\^f+c \times b \times p\^e}{b \times d \times p\^{e+f}}\\]
+\\[\begin{split}\begin{align}\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f} \& =\frac{a \times d \times p\^f+c \times b \times p\^e}{b \times d \times p\^{e+f}} \\\\ \& = \frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}}\end{align}\end{split}\tag{C1}\\]
 
-or
-\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}} \tag{C1}\\]
+Note that *p* appears only in the second term of the numerator, and only if \\(e-f \ne 0\\)
 
 ## Two cases
 
@@ -58,3 +59,7 @@ And it is possible that
 unless there are other restrictions. 
 
 Thus the \\(p\^e\\) term does __not persist__, and we cannot state that the sum is not an integer.
+
+## Multiple primes
+
+If we substitute \\(p\_1p\_2\dots\\) for *p* then the above analy

@@ -30,10 +30,9 @@ What is
 
 Arbitrarily assume \\(e \ge f\\)
 
-\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d \times p\^f+c \times b \times p\^e}{b \times d \times p\^{e+f}}\\]
+\\[\begin{split}\begin{align}\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f} \& =\frac{a \times d \times p\^f+c \times b \times p\^e}{b \times d \times p\^{e+f}} \\\\ \& = \frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}}\end{align}\end{split}\tag{C1}\\]
 
-or
-\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}=\frac{a \times d+c \times b \times p\^{e-f}}{b \times d \times p\^{e}} \tag{C1}\\]
+Note that *p* appears only in the second term of the numerator, and only if \\(e-f \ne 0\\)
 
 ## Two cases
 
@@ -60,3 +59,7 @@ And it is possible that
 unless there are other restrictions. 
 
 Thus the \\(p\^e\\) term does __not persist__, and we cannot state that the sum is not an integer.
+
+## Multiple primes
+
+If we substitute \\(p\_1p\_2\dots\\) for *p* then the above analysis works for each \\(p\_i\\) independently.
