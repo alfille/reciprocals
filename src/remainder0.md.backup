@@ -11,4 +11,4 @@ The special case \\(r=0\\) which means greatest common divisor  \\((r,m)=(0,m)=m
 
 ---
 
-In all other cases, we can assume \\((r,m)=1\\) (relatively prime)
+In all other cases, we  
