@@ -1,5 +1,9 @@
 # Solution Strategy
 
+The sequence
+
+\\[\lbrace v\_1, v\_2,\dots,v\_n\rbrace\\]
+
 We will have partial sums of the form:
 
 \\[ S(n)=\frac{1}{v\_1}+\frac{1}{v\_2}+\frac{1}{v\_3}+\\dots+\frac{1}{v\_n} \\]
@@ -20,7 +24,7 @@ In the series:
 
 \\[v\_1,v\_2,\dots\\]
 
-There is a minimal element \\(v\_m\\) where
+For some prime *p* there is a minimal element \\(v\_m\\) where
 \\[p\mid v\_m\\]
 
 ### Condition II - Start
@@ -40,6 +44,3 @@ Let \\(v\_n\\) be the __next__ term where \\(p\^e\mid v\_n\\)
 Our condition is that \\[p\^{e+1}\mid v\_n\\] 
 
 Thus there is an ever-increasing power of *p* in the denominator of \\(S(1),S(2),\dots\\)
-
-
-\\[\frac{a}{b\times p\^e}+\frac{c}{d\times p\^f}\\]

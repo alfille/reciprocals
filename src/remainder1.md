@@ -2,6 +2,8 @@
 
 There is a flawed solution to the case r=1:
 
+\\[\lbrace m+1, 2m+1, \dots, nm+1 \rbrace\\]
+
 \\[S(n)=\frac{1}{m+1}+\frac{1}{2\times m+1}+\dots+\frac{1}{n\times m+1}\\]
 
 ---

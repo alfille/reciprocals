@@ -1,5 +1,9 @@
 # Straight Reciprocals
 
+Sequence
+
+\\[\lbrace2,3,\dots,n\rbrace\\]
+
 \\[S(n)=1 /2+1 /3+1 /4+\dots+1 /n\tag{P1}\\]
 
 * Prime 
@@ -9,11 +13,11 @@
 * Condition II
 	- \\( 1 /2 \\) is not an integer
 * Condition III 
-	* The first term with \\(2\^e\\) is actually \\(s\^e\\
+	* The first term with \\(2\^e\\) is actually \\(2\^e\\)
 	* The next term with \\(2\^e\\) in it is the first multiple \\[2*2\^e=2\^{e+1}\\]
 * Table of terms, demostrating this
 	
-Term |denominator| \\(ord\_2(term)\\)|\\(ord\_2(S)\\)
+Term |sequence| \\(ord\_2(term)\\)|\\(ord\_2(S)\\)
 ---|---|---|---|
 \\(\frac{1}{2}\\)|2|1|1
 \\(\frac{1}{3}\\)|3|0|1

@@ -1,5 +1,9 @@
 # Solution Strategy
 
+The sequence
+
+\\[\lbrace v\_1, v\_2,\dots,v\_n\rbrace\\]
+
 We will have partial sums of the form:
 
 \\[ S(n)=\frac{1}{v\_1}+\frac{1}{v\_2}+\frac{1}{v\_3}+\\dots+\frac{1}{v\_n} \\]
@@ -20,7 +24,7 @@ In the series:
 
 \\[v\_1,v\_2,\dots\\]
 
-There is a minimal element \\(v\_m\\) where
+For some prime *p* there is a minimal element \\(v\_m\\) where
 \\[p\mid v\_m\\]
 
 ### Condition II - Start

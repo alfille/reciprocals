@@ -9,16 +9,22 @@ For a given __base__, the (infinite) set of numbers that give the same remainder
 ### Examples, base=3
 
 #### Remainder 0
+\\[\lbrace 3,6,9,12,15,\dots\rbrace\\]
+
 \\[ v \equiv 0 \bmod{3}\\]
 
 \\[v=3,6,9,12,15,\dots\\]
 
 #### Remainder 1
+\\[\lbrace \\,3+1,\\,6+1,\\,9+1,\\,12+1,\\,15+1,\\,\dots\rbrace\\]
+
 \\[ v \equiv 1 \bmod{3}\\]
 
 \\[v=4,7,10,13,16,\dots\\]
 
 #### Remainder 2
+\\[\lbrace \\,3+2,\\,6+2,\\,9+2,\\,12+2,\\,15+2,\\,\dots\rbrace\\]
+
 \\[ v \equiv 2 \bmod{3}\\]
 
 \\[v=5,8,11,12,17,\dots\\]

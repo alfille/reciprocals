@@ -19,7 +19,7 @@ I.e. *a* and *b* are *relatively prime*
 
 ### Condition for integer
 
-* A __reduced fraction__ \\( a /b\\) is an integer only if \\(b=1\\) . (We are ignoring zero as a numerator)
+* A __reduced fraction__ \\( a /b\\) is an integer only if \\(b=1\\). (We are ignoring zero as a numerator)
 * An arbitrary fraction \\( a /b\\) is an integer only if
 \\[ b \mid a \\, \text{,  equivalently:} \quad (a,b)=b \\]
 

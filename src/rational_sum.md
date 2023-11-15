@@ -19,9 +19,9 @@ I.e. *a* and *b* are *relatively prime*
 
 ### Condition for integer
 
-* A __reduced fraction__ \\( a /b\\) is an integer only if \\(b=1\\) . (We are ignoring zero as a numerator)
+* A __reduced fraction__ \\( a /b\\) is an integer only if \\(b=1\\). (We are ignoring zero as a numerator)
 * An arbitrary fraction \\( a /b\\) is an integer only if
-\\[ b \mid a \\, \text{,  equivalently:} \quad (a,b)=b \\]
+\\[ b \mid a  \\]
 
 ### Integer sum
 
@@ -31,7 +31,7 @@ The sum:
 
 
 can be an integer only if
-\\[{b\times d} \mid (a \times d + c \times b)\\]
+\\[(b\times d) \mid (a \times d + c \times b)\\]
 
 ----
 

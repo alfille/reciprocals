@@ -1,7 +1,5 @@
 # Prime Power Persistence
 
-## Rational sum
-
 ## Summary
 
 We will show that if a fractions has a prime to a power in the denominator, the sum with another fraction will also have that prime to a power unless:
@@ -9,18 +7,19 @@ We will show that if a fractions has a prime to a power in the denominator, the 
 * the second term has the prime to a higher power (that will win out)
 * the second term has the prime to the same power -- unclear result
 
+## Rational sum
+
+From the [previous section](rational_sum.md)
+
+\\[\frac{a}{b}+\frac{c}{d}=\frac{a \times d + b \times d}{b \times d}\\]
+
 ## Prime factor
 
-From the [previous section (B1)](rational_sum.md) we know that (for reduced fractions)
 
-\\[\frac{a}{b}+\frac{c}{d}=\frac{a \times d+c \times b}{b \times d}\\]
- is an integer only if \\(b=d\\)
- 
----
 
-Choose a number *p* such that
+Choose a prime number *p* such that
 
-\\[(p,a)=1\quad(p,b)=1\quad(p,c)=1\quad(p,d)=1\\]
+\\[p \nmid a,\quad p \nmid b, \quad p\nmid c \quad p \nmid d\\]
 
 i.e. *p* has no factors in common with *a,b,c,d*. The fractions need not be in reduced form.
 
@@ -60,6 +59,6 @@ unless there are other restrictions.
 
 Thus the \\(p\^e\\) term does __not persist__, and we cannot state that the sum is not an integer.
 
-## Multiple primes
+## Utility
 
-If we substitute \\(p\_1p\_2\dots\\) for *p* then the above analysis works for each \\(p\_i\\) independently.
+By finding persistent prime factors, we can prove a sequence doesn't sum to an integer.

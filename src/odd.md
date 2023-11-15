@@ -1,5 +1,9 @@
 # Odd
 
+Sequence
+
+\\[\lbrace3,5,7,\dots,2\times n+1\rbrace\\]
+
 \\[S(n)=\frac{1}{3}+\frac{1}{5}+\frac{1}{7}+\dots+\frac{1}{2 \times n+1}\tag{P1}\\]
 
 * Prime 
@@ -14,7 +18,7 @@
 	* so the next term after that is \\(3 \times 3\^e=3\^{e+1}\\) 
 * Table of Terms
 	
-Term |denominator| \\(ord\_2(term)\\)|\\(ord\_2(S)\\)
+Term |sequence| \\(ord\_3(term)\\)|\\(ord\_3(S)\\)
 ---|---|---|---|
 \\(\frac{1}{3}\\)|3|1|1
 \\(\frac{1}{5}\\)|5|0|1
