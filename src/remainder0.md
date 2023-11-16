@@ -12,4 +12,10 @@ The special case \\(r=0\\) which means greatest common divisor  \\((r,m)=(0,m)=m
 
 ---
 
-In all other cases, we can assume \\((r,m)=1\\) (relatively prime)
+Is \\(\frac{1+S\_{straight}}{m}\\) non-integer? 
+
+Assume false:
+\\[\frac{1+S\_{straight}}{m}=I\\]
+\\[1+S\_{straight}=m\times I\\]
+\\[S\_{straight}=m\times I-1 \leftarrow \text{an integer}\\]
+But we've [already shown](straight.md) \\(S\_{straight}\\) is not an integer. So \\(\frac{1+S\_{straight}}{m}\\) is not an integer.
