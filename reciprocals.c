@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <inttypes.h>
+#include <getopt.h>
 
 #define MAXLENGTH 1000
 
@@ -30,12 +31,16 @@ void help() {
 	printf("\tShows all solution sequences of a given length\n");
 	printf("\tby Paul H Alfille 2023 -- MIT Licence\n\n");
 	printf("Options\n");
-	printf("\t-s3\tstarting length (default 3)\n");
-	printf("\t-e3\tending length (default same as start)\n");
-	printf("\t-i1\tinteger to sum to (default 1)\n");
-	printf("\t-c\ttoggle show counts (default on)\n");
-	printf("\t-q\ttoggle show full sequences (default off)\n"); 
-	printf("\t-h\tthis help\n");
+	printf("\t-s3\t--start\tstarting length (default 3)\n");
+	printf("\t-e3\t--end\tending length (default same as start)\n");
+	printf("\t-i1\t--sum\tinteger to sum to (default 1)\n");
+	printf("\t-c\t\ttoggle show counts (default on)\n");
+	printf("\t\t--count\tshow counts YES\n");
+	printf("\t\t--no_count\tshow counts NO\n");
+	printf("\t-q\t\ttoggle show full sequences (default off)\n"); 
+	printf("\t\t--seq\tshow sequences YES\n");
+	printf("\t\t--no_seq\tshow sequences NO\n");
+	printf("\t-h\t--help\tthis help\n");
 	printf("\nSee https://github.com/alfille/reciprocals for full exposition\n\n");
 	exit(1);
 }
@@ -105,6 +110,19 @@ void summer( void ) {
 	} while( midsummer( 1, val ) ) ;
 }
 
+struct option long_options[] =
+{
+	{"count"   ,   no_argument,       &Gshow_counter,  1},
+	{"no_count",   no_argument,       &Gshow_counter,  0},
+	{"seq"     ,   no_argument,       &Gshow_sequence, 1},
+	{"no_seq"  ,   no_argument,       &Gshow_sequence, 0},
+	{"start"   ,   required_argument, 0, 's'},
+	{"end"     ,   required_argument, 0, 'e'},
+	{"sum"     ,   required_argument, 0, 'i'},
+	{"help"    ,   no_argument,       0, 'h'},
+	{0, 0, 0, 0}
+};
+
 int main( int argc, char * argv[] ) {
 	uint64_t start = 3;
 	uint64_t end = 3;
@@ -116,8 +134,12 @@ int main( int argc, char * argv[] ) {
 
 	// Parse command line
     int c;
-    while ( (c = getopt( argc, argv, "hs:e:i:cq" )) != -1 ) {
+    int option_index ;
+    while ( (c = getopt_long( argc, argv, "hs:e:i:cq", long_options, &option_index )) != -1 ) {
+		//printf("opt=%d, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
 		switch (c) {
+			case 0:
+				break ;
 			case 'h':
 				help();
 				break ;
