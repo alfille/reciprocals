@@ -19,3 +19,12 @@ Corresponds to the (rational) sum:
 For clarity, we'll define \\(\mathcal{R}\\):
 
 \\[Sum\_n = \mathcal{R}(Seq\_n)\\]
+
+## Sequence Notation
+
+For a sequence of numbers:
+
+* positive integers
+* strictly increasing order (no repeats) \\(n\_1\lt n\_2 \lt \dots\\)
+
+\\[ \mathcal{R} \lbrace n\_1, n\_2, \dots, n\_m \rbrace = \frac{1}{n\_1} + \frac{1}{n\_2} + \dots + \frac{1}{n\_m}\\]
