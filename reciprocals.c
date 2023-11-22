@@ -76,8 +76,8 @@ int midsummer( uint64_t index, uint64_t init_val ) {
 	while (1) {
 		//printf("mid index=%" PRIu64 ", val=%" PRIu64 "\n",index,val);
 		// calculate sum -- raw rational
-		uint64_t num = pre_num*val+pre_den ;
-		uint64_t den = pre_den*val ;
+		uint64_t num = pre_num * val + pre_den ;
+		uint64_t den = pre_den * val ;
 		if ( num < den ) {
 			// calculate gdc
 			uint64_t a = num ;

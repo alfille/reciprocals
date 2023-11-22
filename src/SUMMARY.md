@@ -16,6 +16,7 @@
 - [Integral sequences](integral.md)
   - [Consecutive Sequences](consecutive.md)
   - [Sum Total](not_one.md)
+    - [Disjoint Solutions](disjoint.md)
   - [Finite Sequence](finite.md)
   - [Sequnce Proximal Boundary](proximal.md)
 - [Program](program.md)
