@@ -18,5 +18,5 @@
   - [Sum Total](not_one.md)
     - [Disjoint Solutions](disjoint.md)
   - [Finite Sequence](finite.md)
-  - [Sequnce Proximal Boundary](proximal.md)
+  - [Sequnce Starting Point](proximal.md)
 - [Program](program.md)

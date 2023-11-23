@@ -19,6 +19,20 @@ Also,
 
 \\[\mathcal{T\_k(n)} \gt \mathcal{T\_{k}(n+1)} \ge \mathcal{R\_{k}(n+1)}\\]
 
+## Limits
+
+### length
+
+\\[ \lim\_{k \to \infty }\mathcal{T\_k(n)}=\infty \quad \text{for all} \\, n\\]
+
+\\[ \lim\_{k \to \infty }\mathcal{R\_k(n)} \ne\infty \quad \text{for some sequences}\\]
+e.g. \\[\mathcal{R\_k(\lbrace 2\^{-i}\rbrace)}\lt 1\quad \text{for all}\\,k\\]
+
+### Starting value
+
+\\[ \lim\_{n \to \infty }\mathcal{T\_k(n)}=0 \quad \text{for all} \\, k\\]
+\\[ \lim\_{n \to \infty }\mathcal{R\_k(\lbrace v\_i\rbrace})=0 \quad \text{for all} \\, k\quad \text{where}\quad v\_1=n\\]
+
 ## Estimate of value
 
 Since
@@ -29,7 +43,7 @@ We have a upper bound estimate:
 \\[ \frac{k}{n} \ge \mathcal{T\_k(n)} \quad \text{with equality only for} \\quad k=1\\] 
 
 ----
-More accurate estimage:
+More accurate estimate:
 
 ![](images/Tk_estimate.png)
 
