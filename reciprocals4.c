@@ -25,9 +25,11 @@ uint64_t Glength;
 uint64_t Gcounter ;
 uint64_t Ginteger ;
 
-uint64_t Gval[MAXLENGTH];
-uint64_t Gnum[MAXLENGTH]; // numerator
-uint64_t Gden[MAXLENGTH]; // denominator
+struct fraction{
+	uint64_t val ; // 1/val
+	uint64_t num ; // cumulative sum numerator
+	uint64_t den ; // cumulative sum denominator
+} G[ MAXLENGTH ] ;
 
 void help() {
     printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
@@ -48,18 +50,20 @@ void help() {
     exit(1);
 }
 
-int endsummer( uint64_t index, uint64_t init_val ) {
-    uint64_t num = Gnum[Glength-2] ;
-    uint64_t den = Gden[Glength-2] ;
+int latesummer( uint64_t index, struct fraction * pfrac_old ) {
+	struct fraction * pfrac_new = pfrac_old + 1 ;
+    uint64_t num = pfrac_old->num ;
+    uint64_t den = pfrac_old->den ;
+    uint32_t init_val = pfrac_old->val + Ginteger ;
     if ( (num + 1 == den) && (den >= init_val) && (den % Ginteger == 0) ) {
         // solution found
         ++Gcounter ;
-        Gval[Glength-1] = den ;
+        pfrac_new->val = den ;
         if (Gshow_sequence) {
             int i ;
             printf("[ ");
             for ( i=0 ; i<Glength ; ++i ) {
-                printf("%" PRIu64 " ",Gval[i]);
+                printf("%" PRIu64 " ",G[i].val);
             }
             printf("]\n");
         }
@@ -69,104 +73,67 @@ int endsummer( uint64_t index, uint64_t init_val ) {
     return den >= (den-num)*init_val ; 
 }
         
-int latesummer( uint64_t index, uint64_t init_val ) {
-	printf("late summer index %"PRIu64", val %"PRIu64"\n",index,init_val);
-    // last 2 positions
-    uint64_t den = Gden[index-1] ;
-    uint64_t num = den - Gnum[index-1] ; // target
-    // 1/c + 1/d = num/den
-    // descriminant des^2 = num^2-4*den
-    // note num and des are both even or both odd
-    // c = ( num - dec )/2
-    // d = c + dec
-    uint64_t des = num * num ;
-    printf("num/den des %"PRIu64"/%"PRIu64" %"PRIu64"\n",num,den,des);
-    if ( des <= 4 * den ) {
-		printf("des bad\n");
-        //descriminant not positive (zero doesn't work either)
-        return 0 ;
+int midsummer( uint64_t index, struct fraction * pfrac_old ) {
+	//printf("mid entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
+    if ( index == Glength-1 ) {
+        return latesummer( index, pfrac_old ) ;
     }
-    des -= 4 * den ;
-    // Binary search for sqr of des using https://en.wikipedia.org/wiki/Integer_square_root
-    uint64_t L = 0;
-    uint64_t R = des +1 ;
-    uint64_t M ;
-    while ( L != R-1 ) {
-		printf("loop ");
-        M = (L + R ) /2 ; // divide by 2 for average
-        if ( M * M <= des ) {
-            L = M;
-        } else {
-            R = M;
-        }
-    }
+    struct fraction * pfrac_new = pfrac_old + 1 ;
+    uint64_t pre_num = pfrac_old->num ;
+    uint64_t pre_den = pfrac_old->den ;
     
-    uint64_t c = (num - L) / 2 ;
-    if ( L*L != des ) {
-		printf("imperfect square\n");
-		return c != init_val ;
-	} else if ( c < init_val ) {
-		printf("c=%"PRIu64" <val=%"PRIu64"\n",c,init_val);
-		return 1 ;
+    uint64_t init_val = pre_den / ( pre_den - pre_num ) ;
+	//printf("raw calc init_val=%" PRIu64 "\n",init_val);
+    if ( Ginteger == 1 ) {
+		init_val += 1 ;
+	} else {
+		init_val += Ginteger - init_val % Ginteger ;
 	}
-	// solution found
-	++Gcounter ;
-	Gval[index-1] = c ;
-	Gval[index] = c + L ;
-	if (Gshow_sequence) {
-		int i ;
-		printf("[ ");
-		for ( i=0 ; i<Glength ; ++i ) {
-			printf("%" PRIu64 " ",Gval[i]);
-		}
-		printf("]\n");
+	//printf("inc calc init_val=%" PRIu64 "\n",init_val);
+	if ( init_val <= pfrac_old->val ) {
+		init_val = pfrac_old->val + Ginteger ;
 	}
-	return c != init_val ;
-}    
-        
-int midsummer( uint64_t index, uint64_t init_val ) {
-    if ( index == Glength-2 ) {
-        return latesummer( index, init_val ) ;
-    }
-    uint64_t val = init_val ;
-    uint64_t pre_num = Gnum[index-1] ;
-    uint64_t pre_den = Gden[index-1] ;
+	//printf("pre calc init_val=%" PRIu64 "\n",init_val);
+	uint64_t val = init_val ;
+	
     while (1) {
-        printf("mid index=%" PRIu64 ", val=%" PRIu64 "\n",index,val);
+        //printf("mid index=%" PRIu64 ", val=%" PRIu64 "\n",index,val);
         // calculate sum -- raw rational
         uint64_t num = pre_num * val + pre_den ;
         uint64_t den = pre_den * val ;
-        if ( num < den ) {
-            // calculate gdc
-            uint64_t a = num ;
-            uint64_t g = den ;
-            while ( a != 0 ) {
-                uint64_t c = a ;
-                a = g % a ;
-                g = c ;
-            }
-            // reduce sum
-            Gnum[index] = num / g ;
-            Gden[index] = den / g ;
-            Gval[index] = val ;
-            if ( ! midsummer( index+1, val+Ginteger ) ) {
-                return val != init_val ;
-            }
-        }
+
+		// calculate gdc
+		uint64_t a = num ;
+		uint64_t g = den ;
+		while ( a != 0 ) {
+			uint64_t c = a ;
+			a = g % a ;
+			g = c ;
+		}
+		// reduce sum
+		pfrac_new->num = num / g ;
+		pfrac_new->den = den / g ;
+		pfrac_new->val = val ;
+
+		if ( ! midsummer( index+1, pfrac_new ) ) {
+			return val != init_val ;
+		}
+
         val += Ginteger;
     }
 }
 
 void summer( void ) {
+	struct fraction * pfrac = & G[0] ;
     uint64_t val = 2 * Ginteger ; // first value always
-    printf("Glength=%"PRIu64"\n",Glength);
+    //printf("Glength=%"PRIu64"\n",Glength);
     do {
-        printf("top index=%" PRIu64 ", val=%" PRIu64 "\n",0l,val);
-        Gval[0] = val ;
-        Gnum[0] = 1 ;
-        Gden[0] = val ;
+        //printf("top index=%" PRIu64 ", val=%" PRIu64 "\n",0l,val);
+        pfrac->num = 1 ;
+        pfrac->den = val ;
+        pfrac->val = val ;
         val += Ginteger ;
-    } while( midsummer( 1, val ) ) ;
+    } while( midsummer( 1, pfrac ) ) ;
 }
 
 struct option long_options[] =
