@@ -33,6 +33,8 @@ struct fraction{
 	uint64_t den ; // cumulative sum denominator
 } G[ MAXLENGTH ] ;
 
+typedef enum { no_more=0, yes_more = 1 } search_more ;
+
 void help() {
     printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
     printf("\tShows all solution sequences of a given length\n");
@@ -52,17 +54,18 @@ void help() {
     exit(1);
 }
 
-int latesummer( uint64_t index, struct fraction * pfrac_old ) {
+search_more latesummer( uint64_t index, struct fraction * pfrac_old ) {
 	struct fraction * pfrac_new = pfrac_old + 1 ;
     uint64_t den = pfrac_old->den ;
     uint64_t diff = den - pfrac_old->num ;
-    uint32_t val = den / diff ;
+    uint64_t init_val = pfrac_old->val ;
+    uint64_t val = den / diff ;
     
-    if ( val < pfrac_old->val + Ginteger ) {
-		return 0 ;
+    if ( val < init_val + Ginteger ) {
+		return no_more ;
 	}
 	if ( den % diff != 0 ) {
-		return 1 ;
+		return val != init_val ? yes_more : no_more ;
 	}
 	if ( val % Ginteger == 0 ) {
         // solution found
@@ -77,17 +80,19 @@ int latesummer( uint64_t index, struct fraction * pfrac_old ) {
             printf("]\n");
         }
     }
-    return 1 ; 
+	return val != init_val ? yes_more : no_more ;
 }
         
-int latesummer1( uint64_t index, struct fraction * pfrac_old ) {
+search_more latesummer1( uint64_t index, struct fraction * pfrac_old ) {
+	//printf("late entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
 	struct fraction * pfrac_new = pfrac_old + 1 ;
     uint64_t den = pfrac_old->den ;
     uint64_t diff = den - pfrac_old->num ;
-    uint32_t val = den / diff ;
+    uint64_t init_val = pfrac_old->val ;
+    uint64_t val = den / diff ;
     
-    if ( val < pfrac_old->val + 1 ) {
-		return 0 ;
+    if ( val < init_val + 1 ) {
+		return no_more ;
 	}
 	if ( den % diff == 0 ) {
 		// solution found
@@ -102,10 +107,10 @@ int latesummer1( uint64_t index, struct fraction * pfrac_old ) {
 			printf("]\n");
 		}
 	}
-    return 1 ; 
+    return val != init_val + 1 ? yes_more : no_more ; 
 }
         
-int midsummer( uint64_t index, struct fraction * pfrac_old ) {
+search_more midsummer( uint64_t index, struct fraction * pfrac_old ) {
 	//printf("mid entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
     if ( index == Glength-1 ) {
         return latesummer( index, pfrac_old ) ;
@@ -150,14 +155,14 @@ int midsummer( uint64_t index, struct fraction * pfrac_old ) {
 		pfrac_new->val = val ;
 
 		if ( ! midsummer( index+1, pfrac_new ) ) {
-			return val != init_val ;
+			return val != init_val ? yes_more : no_more ;
 		}
 
         val += Ginteger;
     }
 }
 
-int midsummer1( uint64_t index, struct fraction * pfrac_old ) {
+search_more midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 	// Ginteger==1 case
 	//printf("mid entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
     if ( index == Glength-1 ) {
@@ -177,10 +182,11 @@ int midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 			g = c ;
 		}
 		// reduce sum
-		pre_num /= g ;
-		pre_den /= g ;
+		pre_num = pre_num / g ;
+		pre_den = pre_den / g ;
 		pfrac_old->num = pre_num ;
 		pfrac_old->den = pre_den ;
+		//printf("nml entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
 	}
     
     uint64_t init_val = pre_den / ( pre_den - pre_num ) +1 ;
@@ -196,7 +202,7 @@ int midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 		pfrac_new->val = val ;
 
 		if ( ! midsummer1( index+1, pfrac_new ) ) {
-			return val != init_val ;
+			return val != init_val ? yes_more : no_more ;
 		}
 
         val += 1;
@@ -208,12 +214,12 @@ void summer( void ) {
     uint64_t val = 2 * Ginteger ; // first value always
     //printf("Glength=%"PRIu64"\n",Glength);
     do {
-        printf("top index=%" PRIu64 ", val=%" PRIu64 "\n",0l,val);
+        //printf("top index=%" PRIu64 ", val=%" PRIu64 "\n",0l,val);
         pfrac->num = 1 ;
         pfrac->den = val ;
         pfrac->val = val ;
         val += Ginteger ;
-    } while( (Ginteger==1) ? midsummer1( 1, pfrac ) : midsummer( 1, pfrac ) ) ;
+    } while( (Ginteger==1) ? midsummer1( 1, pfrac )==yes_more : midsummer( 1, pfrac )==yes_more ) ;
 }
 
 struct option long_options[] =
