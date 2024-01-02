@@ -252,7 +252,7 @@ void summerday( void ) {
 		return ;
 	}
     //printf("Glength=%"PRIu64"\n",Glength);
-	pfrac->num = 1-val ;
+	pfrac->num = val-1 ;
 	pfrac->den = val ;
 	pfrac->val = val ;
     (Ginteger==1) ? midsummer_for_1( 1, pfrac ) : midsummer( 1, pfrac ) ;
@@ -270,7 +270,7 @@ void summer( void ) {
     
     do {
         //printf("top index=%" PRIu64 ", val=%" PRIu64 "\n",0l,val);
-        pfrac->num = 1-val ;
+        pfrac->num = val-1 ;
         pfrac->den = val ;
         pfrac->val = val ;
         val += Ginteger ;
