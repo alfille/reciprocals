@@ -8,6 +8,9 @@
 
 // Second version (first version in C) -- directly solve last position
 // Third version -- directly solve last 2 positions
+// 4th --last 2 doesn't work, only last
+// 5th more selective use of gcd and use stein's instead
+// 6th -- swith to difference rather than sum
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -30,8 +33,8 @@ uint64_t normalize_threshold = 1000000000000 ;
 
 struct fraction{
 	uint64_t val ; // 1/val
-	uint64_t num ; // cumulative sum numerator
-	uint64_t den ; // cumulative sum denominator
+	uint64_t num ; // cumulative diff numerator
+	uint64_t den ; // cumulative diff denominator
 } G[ MAXLENGTH ] ;
 
 typedef enum { no_more=0, yes_more = 1 } search_more ;
@@ -61,14 +64,14 @@ search_more latesummer( struct fraction * pfrac_old ) {
 	// not "summing to one" case
 	struct fraction * pfrac_new = pfrac_old + 1 ;
     uint64_t den = pfrac_old->den ;
-    uint64_t diff = den - pfrac_old->num ;
+    uint64_t num = pfrac_old->num ;
     uint64_t init_val = pfrac_old->val + Ginteger ;
-    uint64_t val = ( den / ( diff * Ginteger ) ) * Ginteger ;
+    uint64_t val = ( den / ( num * Ginteger ) ) * Ginteger ;
     
     if ( val < init_val ) {
 		return no_more ;
 	}
-	if ( val * diff == den ) {
+	if ( val * num == den ) {
         // solution found
         ++Gcounter ;
         pfrac_new->val = val ;
@@ -84,20 +87,20 @@ search_more latesummer( struct fraction * pfrac_old ) {
 	return val != init_val ? yes_more : no_more ;
 }
         
-search_more latesummer1( struct fraction * pfrac_old ) {
+search_more latesummer_for_1( struct fraction * pfrac_old ) {
 	// Last fraction -- easier calculation because either it a reciprocal or not. No search required
 	// Special for "summing to one"
 	//printf("late entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
 	struct fraction * pfrac_new = pfrac_old + 1 ;
     uint64_t den = pfrac_old->den ;
-    uint64_t diff = den - pfrac_old->num ;
+    uint64_t num = pfrac_old->num ;
     uint64_t init_val = pfrac_old->val + 1 ;
-    uint64_t val = den / diff ;
+    uint64_t val = den / num ;
     
     if ( val < init_val ) {
 		return no_more ;
 	}
-	if ( val * diff == den ) {
+	if ( val * num == den ) {
 		// solution found
 		++Gcounter ;
 		pfrac_new->val = val ;
@@ -126,8 +129,8 @@ search_more midsummer( uint64_t index, struct fraction * pfrac_old ) {
 		// use https://www.geeksforgeeks.org/steins-algorithm-for-finding-gcd/
 		uint64_t a = pre_num ;
 		uint64_t b = pre_den ;
-		int common2 ;
-		for ( common2 = 0 ; ((a | b) & 1 ) == 0; ++common2 ) {
+		int common2s ;
+		for ( common2s = 0 ; ((a | b) & 1 ) == 0; ++common2s ) {
 			a >>= 1 ;
 			b >>= 1 ;
 		}
@@ -146,7 +149,7 @@ search_more midsummer( uint64_t index, struct fraction * pfrac_old ) {
 				b -= a ;
 			}
 		} while ( b != 0 ) ;
-		a <<= common2 ;
+		a <<= common2s ;
 		// reduce sum
 		pre_num = pre_num / a ;
 		pre_den = pre_den / a ;
@@ -155,7 +158,7 @@ search_more midsummer( uint64_t index, struct fraction * pfrac_old ) {
 		//printf("nml entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
 	}
     
-    uint64_t init_val = ( pre_den / ( Ginteger * ( pre_den - pre_num ))) * Ginteger + Ginteger ;
+    uint64_t init_val = ( pre_den / ( Ginteger * pre_num)) * Ginteger + Ginteger ;
 
 	//printf("inc calc init_val=%" PRIu64 "\n",init_val);
 	if ( init_val <= pfrac_old->val ) {
@@ -165,7 +168,7 @@ search_more midsummer( uint64_t index, struct fraction * pfrac_old ) {
 	uint64_t val = init_val ;
 	
     while (1) {
-		pfrac_new->num = pre_num * val + pre_den ;
+		pfrac_new->num = pre_num * val - pre_den ;
 		pfrac_new->den = pre_den * val ;
 		pfrac_new->val = val ;
 
@@ -177,7 +180,7 @@ search_more midsummer( uint64_t index, struct fraction * pfrac_old ) {
     }
 }
 
-search_more midsummer1( uint64_t index, struct fraction * pfrac_old ) {
+search_more midsummer_for_1( uint64_t index, struct fraction * pfrac_old ) {
 	// Middle fraction -- figure out low start and recursion will signal end
 	// Special for "summing to one"
 	//printf("mid entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
@@ -190,8 +193,8 @@ search_more midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 		// use https://www.geeksforgeeks.org/steins-algorithm-for-finding-gcd/
 		uint64_t a = pre_num ;
 		uint64_t b = pre_den ;
-		int common2 ;
-		for ( common2 = 0 ; ((a | b) & 1 ) == 0; ++common2 ) {
+		int common2s ;
+		for ( common2s = 0 ; ((a | b) & 1 ) == 0; ++common2s ) {
 			a >>= 1 ;
 			b >>= 1 ;
 		}
@@ -210,7 +213,7 @@ search_more midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 				b -= a ;
 			}
 		} while ( b != 0 ) ;
-		a <<= common2 ;
+		a <<= common2s ;
 		// reduce sum
 		pre_num = pre_num / a ;
 		pre_den = pre_den / a ;
@@ -219,7 +222,7 @@ search_more midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 		//printf("nml entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",index,pfrac_old->val,pfrac_old->num,pfrac_old->den);
 	}
     
-    uint64_t init_val = pre_den / ( pre_den - pre_num ) +1 ;
+    uint64_t init_val = pre_den / pre_num +1 ;
 	if ( init_val <= pfrac_old->val ) {
 		init_val = pfrac_old->val + 1 ;
 	}
@@ -227,11 +230,11 @@ search_more midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 	uint64_t val = init_val ;
 	
     while (1) {
-		pfrac_new->num = pre_num * val + pre_den ;
+		pfrac_new->num = pre_num * val - pre_den ;
 		pfrac_new->den = pre_den * val ;
 		pfrac_new->val = val ;
 
-		if ( ((index<Glength-2)?midsummer1( index+1, pfrac_new ):latesummer1(pfrac_new)) == no_more ) {
+		if ( ((index<Glength-2)?midsummer_for_1( index+1, pfrac_new ):latesummer_for_1(pfrac_new)) == no_more ) {
 			return val != init_val ? yes_more : no_more ;
 		}
 
@@ -240,7 +243,7 @@ search_more midsummer1( uint64_t index, struct fraction * pfrac_old ) {
 }
 
 void summerday( void ) {
-	// restrict first digit
+	// restrict search only for specified first digit
 	struct fraction * pfrac = & G[0] ;
     uint64_t val = Gfirst ; // first value always
     
@@ -249,10 +252,10 @@ void summerday( void ) {
 		return ;
 	}
     //printf("Glength=%"PRIu64"\n",Glength);
-	pfrac->num = 1 ;
+	pfrac->num = 1-val ;
 	pfrac->den = val ;
 	pfrac->val = val ;
-    (Ginteger==1) ? midsummer1( 1, pfrac ) : midsummer( 1, pfrac ) ;
+    (Ginteger==1) ? midsummer_for_1( 1, pfrac ) : midsummer( 1, pfrac ) ;
 }
 
 void summer( void ) {
@@ -267,11 +270,11 @@ void summer( void ) {
     
     do {
         //printf("top index=%" PRIu64 ", val=%" PRIu64 "\n",0l,val);
-        pfrac->num = 1 ;
+        pfrac->num = 1-val ;
         pfrac->den = val ;
         pfrac->val = val ;
         val += Ginteger ;
-    } while( ( (Ginteger==1) ? midsummer1( 1, pfrac ) : midsummer( 1, pfrac ) ) == yes_more ) ;
+    } while( ( (Ginteger==1) ? midsummer_for_1( 1, pfrac ) : midsummer( 1, pfrac ) ) == yes_more ) ;
 }
 
 struct option long_options[] =
