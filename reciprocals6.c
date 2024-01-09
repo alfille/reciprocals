@@ -29,6 +29,8 @@ uint64_t Glength;
 uint64_t Gcounter ;
 uint64_t Ginteger ;
 int Gtimer_mode = 0 ;
+int Grange_mode = 0 ;
+uint64_t Guntil = 0 ;
 struct timespec Gtime ;
 
 uint64_t normalize_threshold = 1000000000000 ;
@@ -55,7 +57,9 @@ void help() {
     printf("\t-q\t\ttoggle show full sequences (default off)\n"); 
     printf("\t\t--seq\tshow sequences YES\n");
     printf("\t\t--no_seq\tshow sequences NO\n");
-    printf("\t\t--t\t --timer \t timer mode -- expects specified values to follow as regular arguemtns\n");
+    printf("\t-t\t --timer \t timer mode -- expects specified values to follow as regular arguemtns\n");
+    printf("\t-u\t --until \t timer mode, increment last value until this value\n");
+    printf("\t-r\t --range \t show range of next level-- expects specified values to follow as regular arguemtns\n");
     printf("\t-h\t--help\tthis help\n");
     printf("\nSee https://github.com/alfille/reciprocals for full exposition\n\n");
     exit(1);
@@ -117,6 +121,32 @@ search_more Latesummer_for_1( struct fraction * pfrac_old ) {
     }
     return val != init_val ? yes_more : no_more ; 
 }
+
+uint64_t gcd( uint64_t a, uint64_t b ) {
+    // calculate gcd
+    // use https://www.geeksforgeeks.org/steins-algorithm-for-finding-gcd/
+    int common2s ;
+    for ( common2s = 0 ; ((a | b) & 1 ) == 0; ++common2s ) {
+        a >>= 1 ;
+        b >>= 1 ;
+    }
+    while ( (a & 1) == 0 ) {
+        a >>= 1 ;
+    }
+    do {
+        while ((b & 1) == 0 ) {
+            b >>= 1 ;
+        }
+        if ( a > b ) {
+            uint64_t c = b ;
+            b = a - b ;
+            a = c;
+        } else {
+            b -= a ;
+        }
+    } while ( b != 0 ) ;
+    return a << common2s ;
+}
         
 search_more Midsummer( uint64_t index, struct fraction * pfrac_old ) {
     // Middle fraction -- figure out low start and recursion will signal end
@@ -127,31 +157,8 @@ search_more Midsummer( uint64_t index, struct fraction * pfrac_old ) {
     uint64_t pre_den = pfrac_old->den ;
     
     if ( pre_den > normalize_threshold ) {
-        // calculate gdc
-        // use https://www.geeksforgeeks.org/steins-algorithm-for-finding-gcd/
-        uint64_t a = pre_num ;
-        uint64_t b = pre_den ;
-        int common2s ;
-        for ( common2s = 0 ; ((a | b) & 1 ) == 0; ++common2s ) {
-            a >>= 1 ;
-            b >>= 1 ;
-        }
-        while ( (a & 1) == 0 ) {
-            a >>= 1 ;
-        }
-        do {
-            while ((b & 1) == 0 ) {
-                b >>= 1 ;
-            }
-            if ( a > b ) {
-                uint64_t c = b ;
-                b = a - b ;
-                a = c;
-            } else {
-                b -= a ;
-            }
-        } while ( b != 0 ) ;
-        a <<= common2s ;
+        // calculate gcd
+        uint64_t a = gcd( pre_num, pre_den ) ;
         // reduce sum
         pre_num = pre_num / a ;
         pre_den = pre_den / a ;
@@ -191,31 +198,8 @@ search_more Midsummer_for_1( uint64_t index, struct fraction * pfrac_old ) {
     uint64_t pre_den = pfrac_old->den ;
     
     if ( pre_den > normalize_threshold ) {
-        // calculate gdc
-        // use https://www.geeksforgeeks.org/steins-algorithm-for-finding-gcd/
-        uint64_t a = pre_num ;
-        uint64_t b = pre_den ;
-        int common2s ;
-        for ( common2s = 0 ; ((a | b) & 1 ) == 0; ++common2s ) {
-            a >>= 1 ;
-            b >>= 1 ;
-        }
-        while ( (a & 1) == 0 ) {
-            a >>= 1 ;
-        }
-        do {
-            while ((b & 1) == 0 ) {
-                b >>= 1 ;
-            }
-            if ( a > b ) {
-                uint64_t c = b ;
-                b = a - b ;
-                a = c;
-            } else {
-                b -= a ;
-            }
-        } while ( b != 0 ) ;
-        a <<= common2s ;
+        // calculate gcd
+        uint64_t a = gcd( pre_num, pre_den ) ;
         // reduce sum
         pre_num = pre_num / a ;
         pre_den = pre_den / a ;
@@ -269,6 +253,8 @@ struct option long_options[] =
     {"end"     ,   required_argument, 0, 'e'},
     {"sum"     ,   required_argument, 0, 'i'},
     {"timer"   ,   no_argument,       &Gtimer_mode   , 1},       
+    {"until"   ,   no_argument,       0,  'u'},       
+    {"range"   ,   no_argument,       &Grange_mode   , 1},       
     {"help"    ,   no_argument,       0, 'h'},
     {0, 0, 0, 0}
 };
@@ -323,8 +309,14 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
         }
         G[index].num -= G[index-1].den ;
         G[index].den = G[index-1].den * val ;
+        if ( G[index].den > normalize_threshold ) {
+            uint64_t a = gcd( G[index].num, G[index].den ) ;
+            G[index].num /= a;
+            G[index].den /= a;
+        }
         G[index].val = val ;
     }
+    //printf("Preset add: index=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 ", val=%" PRIu64 "\n",index,G[index].num,G[index].den,G[index].val);
     return yes_more ;
 }
 
@@ -364,6 +356,15 @@ search_more Timer_out( search_more status ) {
     return status ;
 }
 
+void Range_out( uint64_t from, uint64_t to ) {
+    //printf("%" PRIu64 ", %" PRIu64 "\n" , from, to );
+    if ( (from==0) || (from>to) ) {
+        to = 0 ;
+        from = 0 ;
+    } 
+    printf("%" PRIu64 ", %" PRIu64 "\n" , from, to );
+}
+
 int main( int argc, char * argv[] ) {
     uint64_t start = 3;
     uint64_t end = 3;
@@ -376,7 +377,7 @@ int main( int argc, char * argv[] ) {
     // Parse command line
     int c;
     int option_index ;
-    while ( (c = getopt_long( argc, argv, "ths:e:i:cq", long_options, &option_index )) != -1 ) {
+    while ( (c = getopt_long( argc, argv, "trhs:e:i:u:cq", long_options, &option_index )) != -1 ) {
         //printf("opt=%d, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
         switch (c) {
             case 0:
@@ -396,11 +397,18 @@ int main( int argc, char * argv[] ) {
             case 'e':
                 end = (uint64_t) atoi(optarg);
                 break ;
+            case 'u':
+                Guntil = (uint64_t) atoi(optarg);
+                Gtimer_mode = 1 ;
+                break ;
             case 'i':
                 Ginteger = (uint64_t) atoi(optarg);
                 break ;
             case 't':
                 Gtimer_mode = 1;
+                break ;
+            case 'r':
+                Grange_mode = 1;
                 break ;
             default:
                 help() ;
@@ -427,24 +435,73 @@ int main( int argc, char * argv[] ) {
     if ( Ginteger < 1 ) {
         Ginteger = 1 ;
     }
+    if ( (Gtimer_mode==1) || (Grange_mode==1) ) {
+        end = start ;
+    }
 
     // now run calculations
     if ( Gtimer_mode == 1 ) {
         // timer mode with preset values
-        uint64_t index = 0 ;
         Reset( start ) ;
         if ( optind >= argc ) {
             // no presets given
             return Timer_out( Summer() ) ;
         } else {
             // Add presets first
+            uint64_t index = 0 ;
             for ( int i = optind; i < argc; ++i) {
                 ++ index ;
                 if ( Add_preset( index-1, atoll(argv[i]) ) == error_more ) {
                     return Timer_out(error_more) ;
                 }
             }
-            return Timer_out( (Ginteger==1) ? Midsummer_for_1( index, &G[index-1] ) : Midsummer( index, &G[index-1] ) );
+            if ( Guntil < G[index-1].val ) {
+                Guntil = G[index-1].val ;
+            }
+            uint64_t from = G[index-1].val ;
+            for ( uint64_t j = G[index-1].val; j < Guntil + Ginteger ; j += Ginteger ) {
+                Add_preset( index-1 , j ) ;
+                switch ((Ginteger==1) ? Midsummer_for_1( index, &G[index-1] ) : Midsummer( index, &G[index-1] ) ) {
+                    case yes_more:
+                        break ;
+                    case no_more:
+                        return Timer_out( no_more ) ;
+                    case error_more:
+                        return Timer_out( error_more ) ;
+                }
+            }
+            return Timer_out( yes_more );
+        }
+    } else if ( Grange_mode == 1 ) {
+        // timer mode with preset values
+        uint64_t from ;
+        uint64_t to ;
+        int err = 0 ;
+        Reset( start ) ;
+        if ( optind >= argc ) {
+            from = 2 ;
+            // no presets given
+            to = Ginteger * ( (uint64_t) ( 1.1 + (Glength) / (exp(Ginteger)-1) ) ) ;
+        } else {
+            uint64_t index = 0 ;
+            // Add presets first
+            for ( int i = optind; i < argc; ++i) {
+                ++ index ;
+                if ( Add_preset( index-1, atoll(argv[i]) ) == error_more ) {
+                    err = 1 ; // flag an error
+                    break ;
+                }
+            }
+            from = ( G[index-1].den / ( Ginteger * G[index-1].num)) * Ginteger + Ginteger ;
+            if ( from < G[index-1].val + Ginteger ) {
+                from = G[index-1].val + Ginteger ;
+            }
+            to = Ginteger * ( (uint64_t) ( 1.1 + (Glength-index) / (exp(((double) Ginteger * G[index-1].num)/(G[index-1].den))-1) ) );
+        }
+        if ( err ) {
+            Range_out( 0,0 );
+        } else {
+            Range_out( from, to ) ;
         }
     } else {
         // solve directly for a range of sequence lengths
