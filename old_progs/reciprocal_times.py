@@ -1,17 +1,37 @@
 #!/usr/bin/env python3
 
 import subprocess
+import os
+import signal
 import sys
 import argparse
 import sqlite3
 
-gTimeout = 120
-gLength = 3
-gProgram = "reciprocals6"
+def test( level, vals ):
+    print([SolutionSpace.gProgram,"-s",str(SolutionSpace.gLength),"--timer"]+[str(v) for v in vals])
+    with subprocess.Popen(
+        [SolutionSpace.gProgram,"-s",str(SolutionSpace.gLength),"--timer"]+[str(v) for v in vals],
+        stdout=subprocess.PIPE,
+        preexec_fn=os.setsid
+        ) as process:
+        try:
+            output=process.communicate(timeout=SolutionSpace.gTimeout)[0]
+            try:
+                timer,counter,status = output.decode('utf-8').split(',')
+                print(f"{timer} sec, {counter} solutions, status: {status}")
+            except:
+                print(f"Return: {output.decode('utf-8')}")
+        except subprocess.TimeoutExpired:
+            print("Timeout")
+            os.killpg(process.pid, signal.SIGINT) # send signal to the process group
+            output=process.communicate()[0]
 
 class SolutionSpace:
+    gTimeout = 120
+    gLength = 3
+    gProgram = "./reciprocals6"
     def __init__(self):
-        self.filename = f"Reciprocal_{gLength}.db"
+        self.filename = f"Reciprocal_{SolutionSpace.gLength}.db"
         self.level = 0
         self.solution = {}
         self.con = sqlite3.connect(self.filename)
@@ -21,13 +41,13 @@ class SolutionSpace:
     def single_try( self, level, vals ):
         cursor = self.con.cursor()
         try:
-            timer,couter,status = subprocess.run(
-                [gProgram,"-s",gLength,"--timer"]+vals,
-                timeout = gTimeout,
+            timer,counter,status = subprocess.run(
+                [SolutionSpace.gProgram,"-s",str(SolutionSpace.gLength),"--timer"]+[str(v) for v in vals],
+                timeout = SolutionSpace.gTimeout,
                 capture_output = True
-                ).split(",")
+                ).stdout.decode('utf-8').split(",")
             cursor.execute(f"INSERT INTO solve VALUES ({','.join(vals)}, {level}, {timer}, {counter}, 'done'")
-        except TimeoutExpired:
+        except subprocess.TimeoutExpired:
             cursor.execute(f"INSERT INTO solve VALUES ({level}, -1, 0, 'timeout', {',',join(vals)}")
         self.con.commit()
             
@@ -35,7 +55,7 @@ class SolutionSpace:
 def MakeCommand( vals=[] ):
     if vals == None:
         vals = []
-    return [gProgram,"-s",gLength,"--timer"]+vals
+    return [SolutionSpace.gProgram,"-s",SolutionSpace.gLength,"--timer"]+vals
 
 # Custom argparse type representing a bounded int
 # from https://stackoverflow.com/questions/14117415/how-can-i-constrain-a-value-parsed-with-argparse-for-example-restrict-an-integer
@@ -73,8 +93,8 @@ def main( sysargs ):
     parser.add_argument('-l','--length',
         metavar="Length",
         required=False,
-        default=3,
-        const=3,
+        default=SolutionSpace.gLength,
+        const=SolutionSpace.gLength,
         dest="length",
         type=IntRange(3),
         nargs='?',
@@ -83,8 +103,8 @@ def main( sysargs ):
     parser.add_argument('-t','--timeout',
         metavar="Timeout",
         required=False,
-        default=120,
-        const=120,
+        default=SolutionSpace.gTimeout,
+        const=SolutionSpace.gTimeout,
         dest="timeout",
         type=IntRange(10,6000),
         nargs='?',
@@ -93,20 +113,28 @@ def main( sysargs ):
     parser.add_argument('-p','--program',
         metavar="Program",
         required=False,
-        default="reciprocals6",
+        default=SolutionSpace.gProgram,
         dest="program",
         type=str,
         nargs='?',
         help='Program to invoke for solving'
-        )    
+        )
+    parser.add_argument("vals",
+        metavar="VALUES",
+        type=IntRange(2),
+        #action='append',
+        nargs="*",
+        help="Preset values"
+        )
         
     args=parser.parse_args()
-    #print(sysargs,args)
-    gLength = args.length
-    gTimeout = args.timeout
-    gProgram = args.program
+    print(sysargs,args)
+    SolutionSpace.gLength = args.length
+    SolutionSpace.gTimeout = args.timeout
+    SolutionSpace.gProgram = args.program
 
-
+    test( 0, args.vals )
+    
 if __name__ == "__main__":
     sys.exit(main(sys.argv))
 else:

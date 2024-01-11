@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <signal.h>
 #include <math.h>
 #include <inttypes.h>
 #include <getopt.h>
@@ -32,6 +33,9 @@ int Gtimer_mode = 0 ;
 int Grange_mode = 0 ;
 uint64_t Guntil = 0 ;
 struct timespec Gtime ;
+int Gtimeout = 0 ;
+uint64_t Gfrom ;
+uint64_t Gto ;
 
 uint64_t normalize_threshold = 1000000000000 ;
 
@@ -42,28 +46,6 @@ struct fraction{
 } G[ MAXLENGTH ] ;
 
 typedef enum { no_more=0, yes_more = 1, error_more = 2 } search_more ;
-
-void help() {
-    printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
-    printf("\tShows all solution sequences of a given length\n");
-    printf("\tby Paul H Alfille 2023 -- MIT Licence\n\n");
-    printf("Options\n");
-    printf("\t-s3\t--start\tstarting length (default 3)\n");
-    printf("\t-e3\t--end\tending length (default same as start)\n");
-    printf("\t-i1\t--sum\tinteger to sum to (default 1)\n");
-    printf("\t-c\t\ttoggle show counts (default on)\n");
-    printf("\t\t--count\tshow counts YES\n");
-    printf("\t\t--no_count\tshow counts NO\n");
-    printf("\t-q\t\ttoggle show full sequences (default off)\n"); 
-    printf("\t\t--seq\tshow sequences YES\n");
-    printf("\t\t--no_seq\tshow sequences NO\n");
-    printf("\t-t\t --timer \t timer mode -- expects specified values to follow as regular arguemtns\n");
-    printf("\t-u\t --until \t timer mode, increment last value until this value\n");
-    printf("\t-r\t --range \t show range of next level-- expects specified values to follow as regular arguemtns\n");
-    printf("\t-h\t--help\tthis help\n");
-    printf("\nSee https://github.com/alfille/reciprocals for full exposition\n\n");
-    exit(1);
-}
 
 search_more Latesummer( struct fraction * pfrac_old ) {
     // Last fraction -- easier calculation because either it a reciprocal or not. No search required
@@ -243,22 +225,6 @@ search_more Summer( void ) {
     return no_more ;
 }
 
-struct option long_options[] =
-{
-    {"count"   ,   no_argument,       &Gshow_counter,  1},
-    {"no_count",   no_argument,       &Gshow_counter,  0},
-    {"seq"     ,   no_argument,       &Gshow_sequence, 1},
-    {"no_seq"  ,   no_argument,       &Gshow_sequence, 0},
-    {"start"   ,   required_argument, 0, 's'},
-    {"end"     ,   required_argument, 0, 'e'},
-    {"sum"     ,   required_argument, 0, 'i'},
-    {"timer"   ,   no_argument,       &Gtimer_mode   , 1},       
-    {"until"   ,   no_argument,       0,  'u'},       
-    {"range"   ,   no_argument,       &Grange_mode   , 1},       
-    {"help"    ,   no_argument,       0, 'h'},
-    {0, 0, 0, 0}
-};
-
 void Reset( uint64_t length ) {
     Glength = length ;
     Gcounter = 0 ;
@@ -271,6 +237,8 @@ search_more Solve( uint64_t start, uint64_t end ) {
     for ( uint64_t length=start ; length <= end ; ++ length ) {
         Reset( length ) ;
         //printf("Computing %" PRIu64 "\n",length);
+        Gfrom = 2 ;
+        Gto = Ginteger * ( (uint64_t) ( 1.1 + (Glength) / (exp(Ginteger)-1) ) ) ;
         ret = Summer() ;
         if ( Gshow_counter ) {
             printf("Length= %" PRIu64 ", Count= %" PRIu64 "\n",length,Gcounter);
@@ -283,13 +251,13 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
     // add a preset value for timing
     if ( val % Ginteger != 0 ) {
         // bad val -- not divisible by Ginteger
-        fprintf( stderr, "Error: preset value %", PRIu64 " not divisible by %" PRIu64 "\n", val, Ginteger );
+        fprintf( stderr, "Error: preset value %" PRIu64 " not divisible by %" PRIu64 "\n", val, Ginteger );
         return error_more ;
     }
     
     if ( index == 0 ) {
         if ( val < 2 * Ginteger ) {
-            fprintf( stderr, "Error: first preset value %", PRIu64 " not minimum %" PRIu64 "\n", val, 2 * Ginteger );
+            fprintf( stderr, "Error: first preset value %" PRIu64 " not minimum %" PRIu64 "\n", val, 2 * Ginteger );
             return error_more ;
         }
         G[index].num = val-1 ;
@@ -298,13 +266,13 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
     } else {
         if ( val < G[index-1].val + Ginteger ) {
             // test that values are increasing
-            fprintf( stderr, "Error: preset value %", PRIu64 " not greater than previous %" PRIu64 "\n", val, G[index-1].val );
+            fprintf( stderr, "Error: preset value %" PRIu64 " not greater than prior preset %" PRIu64 "\n", val, G[index-1].val );
             return error_more ;
         }
         G[index].num = G[index-1].num * val ;
-        if ( G[index].num < G[index-1].den ) {
+        if ( G[index].num <= G[index-1].den ) {
             // test that difference is still positive
-            fprintf( stderr, "Error: sum at preset value %", PRIu64 " greater than 1\n", val );
+            fprintf( stderr, "Error: sum at preset value %" PRIu64 " not less than than 1\n", val );
             return error_more ;
         }
         G[index].num -= G[index-1].den ;
@@ -365,6 +333,49 @@ void Range_out( uint64_t from, uint64_t to ) {
     printf("%" PRIu64 ", %" PRIu64 "\n" , from, to );
 }
 
+void Timeout_handler( int sig ) {
+    printf("%" PRIu64 ", %" PRIu64 ", timeout\n",Gfrom, Gto ) ;
+    exit(1);
+}
+
+void help() {
+    printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
+    printf("\tShows all solution sequences of a given length\n");
+    printf("\tby Paul H Alfille 2023 -- MIT Licence\n\n");
+    printf("Options\n");
+    printf("\t-s3\t--start\tstarting number of terms (default 3)\n");
+    printf("\t-e3\t--end\tending number of terms (default same as start)\n");
+    printf("\t-i1\t--sum\tinteger to sum to (default 1)\n");
+    printf("\t-c\t\ttoggle show counts (default on)\n");
+    printf("\t\t--count\tshow counts YES\n");
+    printf("\t\t--no_count\tshow counts NO\n");
+    printf("\t-q\t\ttoggle show full sequences (default off)\n"); 
+    printf("\t\t--seq\tshow sequences YES\n");
+    printf("\t\t--no_seq\tshow sequences NO\n");
+    printf("\t-t\t --timeout \t kill calculation after specified seconds (default none)\n");
+    printf("\t-u\t --until \t range of last preset value\n");
+    printf("\t-r\t --range \t show range of next level-- expects specified values to follow as regular arguemtns\n");
+    printf("\t-h\t--help\tthis help\n");
+    printf("\nSee https://github.com/alfille/reciprocals for full exposition\n\n");
+    exit(1);
+}
+
+struct option long_options[] =
+{
+    {"count"   ,   no_argument,       &Gshow_counter,  1},
+    {"no_count",   no_argument,       &Gshow_counter,  0},
+    {"seq"     ,   no_argument,       &Gshow_sequence, 1},
+    {"no_seq"  ,   no_argument,       &Gshow_sequence, 0},
+    {"start"   ,   required_argument, 0, 's'},
+    {"end"     ,   required_argument, 0, 'e'},
+    {"sum"     ,   required_argument, 0, 'i'},
+    {"timeout" ,   required_argument, 0, 't'},       
+    {"until"   ,   no_argument,       0, 'u'},       
+    {"range"   ,   no_argument,       &Grange_mode   , 1},       
+    {"help"    ,   no_argument,       0, 'h'},
+    {0, 0, 0, 0}
+};
+
 int main( int argc, char * argv[] ) {
     uint64_t start = 3;
     uint64_t end = 3;
@@ -377,8 +388,8 @@ int main( int argc, char * argv[] ) {
     // Parse command line
     int c;
     int option_index ;
-    while ( (c = getopt_long( argc, argv, "trhs:e:i:u:cq", long_options, &option_index )) != -1 ) {
-        //printf("opt=%d, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
+    while ( (c = getopt_long( argc, argv, "t:rhs:e:i:u:cq", long_options, &option_index )) != -1 ) {
+        //printf("opt=%c, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
         switch (c) {
             case 0:
                 break ;
@@ -405,7 +416,7 @@ int main( int argc, char * argv[] ) {
                 Ginteger = (uint64_t) atoi(optarg);
                 break ;
             case 't':
-                Gtimer_mode = 1;
+                Gtimeout = atoi(optarg);
                 break ;
             case 'r':
                 Grange_mode = 1;
@@ -439,22 +450,41 @@ int main( int argc, char * argv[] ) {
         end = start ;
     }
 
+    // Timer handler
+    signal( SIGALRM, Timeout_handler);
+    if ( Gtimeout > 0 ) {
+        printf("Timeout set %d\n",Gtimeout ) ;
+        alarm( Gtimeout ) ;
+    }
+
     // now run calculations
     if ( Gtimer_mode == 1 ) {
         // timer mode with preset values
         Reset( start ) ;
         if ( optind >= argc ) {
             // no presets given
+            Gfrom = 2 ;
+            Gto = Ginteger * ( (uint64_t) ( 1.1 + (Glength) / (exp(Ginteger)-1) ) ) ;
             return Timer_out( Summer() ) ;
         } else {
             // Add presets first
             uint64_t index = 0 ;
             for ( int i = optind; i < argc; ++i) {
                 ++ index ;
+                if ( index == start-1 ) {
+                    --index ;
+                    fprintf(stderr, "Too many preset values -- will only first %" PRIu64 "\n",start-2);
+                    Guntil = 0 ;
+                }
                 if ( Add_preset( index-1, atoll(argv[i]) ) == error_more ) {
                     return Timer_out(error_more) ;
                 }
             }
+            Gfrom = ( G[index-1].den / ( Ginteger * G[index-1].num)) * Ginteger + Ginteger ;
+            if ( Gfrom < G[index-1].val + Ginteger ) {
+                Gfrom = G[index-1].val + Ginteger ;
+            }
+            Gto = Ginteger * ( (uint64_t) ( 1.1 + (Glength-index) / (exp(((double) Ginteger * G[index-1].num)/(G[index-1].den))-1) ) );
             if ( Guntil < G[index-1].val ) {
                 Guntil = G[index-1].val ;
             }
@@ -487,6 +517,10 @@ int main( int argc, char * argv[] ) {
             // Add presets first
             for ( int i = optind; i < argc; ++i) {
                 ++ index ;
+                if ( index == start-1 ) {
+                    --index ;
+                    fprintf(stderr, "Too many preset values -- will only first %" PRIu64 "\n",start-2);
+                }
                 if ( Add_preset( index-1, atoll(argv[i]) ) == error_more ) {
                     err = 1 ; // flag an error
                     break ;
