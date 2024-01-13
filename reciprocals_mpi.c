@@ -123,6 +123,7 @@ search_more CommunicationSetup() {
     } ;
     MPI_Datatype sSetup_types[] = { MPI_UINT64_T, MPI_UINT32_T, MPI_UINT32_T } ;
     MPI_Type_create_struct( sSetup_count, sSetup_blocklen, sSetup_offset, sSetup_types, &sSetup_type ) ;
+    MPI_Type_commit( &sSetup_type ) ;
 
     // Job 
     int sJob_blocklen[] = {1,1,Gterms} ;
@@ -133,6 +134,7 @@ search_more CommunicationSetup() {
     } ;
     MPI_Datatype sJob_types[] = { MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T } ;
     MPI_Type_create_struct( sJob_count, sJob_blocklen, sJob_offset, sJob_types, &sJob_type ) ; 
+    MPI_Type_commit( &sJob_type ) ;
 
     // Response
     int sResponse_count = 6 ;
@@ -146,7 +148,8 @@ search_more CommunicationSetup() {
         offsetof(struct sResponse, elapsed)
     } ;
     MPI_Datatype sResponse_types[] = { sJob_type, MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T, MPI_UINT64_T, MPI_DOUBLE } ;
-    MPI_Type_create_struct( sResponse_count, sResponse_blocklen, sResponse_offset, sResponse_types, &sResponse_type ) ; 
+    MPI_Type_create_struct( sResponse_count, sResponse_blocklen, sResponse_offset, sResponse_types, &sResponse_type ) ;
+    MPI_Type_commit( &sResponse_type ) ;
 }    
 
 search_more Lastterm( struct fraction * pfrac_old ) {
