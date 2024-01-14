@@ -57,14 +57,14 @@ struct sSetup {
     uint64_t number ;
     uint32_t sum ;
     uint32_t timeout ;
-} ;
+} xSetup ;
 MPI_Datatype sSetup_type ;
 
 struct sJob {
     uint32_t nPresets ;
     uint64_t until ;
     uint64_t presets[0] ; // Gterms, actually
-} ;
+} xJob ;
 MPI_Datatype sJob_type ;
 int sJob_count = 3 ;
 
@@ -75,20 +75,22 @@ struct sResponse {
     uint64_t to ;
     uint64_t count ;
     double_t elapsed ;
-} ;
+} xResponse ;
 MPI_Datatype sResponse_type ;
 
 #define MAXTERMS 1000000
 
-int      Gshow_sequence ;
-int      Gterms = 4;
-uint64_t Gcounter ;
-uint64_t Gsum = 1 ;
-uint64_t Guntil = 0 ;
+int       Gterms = 4;
+uint64_t  Gcounter ;
+uint64_t  Gsum = 1 ;
+uint64_t  Guntil = 0 ;
 struct timespec Gtime ;
-int      Gtimeout = 0 ;
-uint64_t Gfrom ;
-uint64_t Gto ;
+int       Gtimeout = 0 ;
+uint64_t  Gfrom ;
+uint64_t  Gto ;
+int       Grank ; // MPI rank 
+int       Gsize ; // MPI size
+const int Groot = 0 ;
 
 uint64_t normalize_threshold = 1000000000000 ;
 
@@ -112,7 +114,10 @@ search_more SetupSlave( struct sSetup* s ) {
     Gtimeout = s->timeout ;
 }
 
-search_more CommunicationSetup() {
+void CommunicationSetupPre(void) {
+    // Setup before number of terms is known
+    // Create the message struct as a defined MPI Datatype
+
     // Setup
     int sSetup_count = 3 ;
     int sSetup_blocklen[] = {1,1,1} ;
@@ -124,6 +129,11 @@ search_more CommunicationSetup() {
     MPI_Datatype sSetup_types[] = { MPI_UINT64_T, MPI_UINT32_T, MPI_UINT32_T } ;
     MPI_Type_create_struct( sSetup_count, sSetup_blocklen, sSetup_offset, sSetup_types, &sSetup_type ) ;
     MPI_Type_commit( &sSetup_type ) ;
+}
+
+void CommunicationSetupPost(void) {
+    // Setup after number of terms is known
+    // Create the message struct as a defined MPI Datatype
 
     // Job 
     int sJob_blocklen[] = {1,1,Gterms} ;
@@ -406,6 +416,22 @@ void Timeout_handler( int sig ) {
     exit(1);
 }
 
+void WorkerSetup( void ) {
+    // Broadcast parameters to all workers
+    xSetup.number = Gterms ;
+    xSetup.sum = Gsum ;
+    xSetup.timeout = Gtimeout ;
+    MPI_Bcast( &xSetup, 1, sSetup_type, Groot, MPI_COMM_WORLD ) ;
+    Gterms = xSetup.number ;
+    Gsum = xSetup.sum ;
+    Gtimeout = xSetup.timeout ;
+
+    printf("From %d, terms = %" PRIu64 "\n", Grank, Gterms) ;
+
+    CommunicationSetupPost() ;
+}
+        
+
 void help() {
     printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
     printf("\tShows all solution sequences of a given length\n");
@@ -440,103 +466,115 @@ int main( int argc, char * argv[] ) {
     // defaults
     Gsum = 1 ;
 
-    // Parse command line
-    int c;
-    int option_index ;
-    while ( (c = getopt_long( argc, argv, "t:r:hs:n:", long_options, &option_index )) != -1 ) {
-        //printf("opt=%c, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
-        switch (c) {
-            case 0:
-                break ;
-            case 'h':
-                help();
-                break ;
-            case 'n':
-                Gterms = (uint64_t) atoi(optarg);
-                break ;
-            case 'r':
-                Guntil = (uint64_t) atoi(optarg);
-                break ;
-            case 's':
-                Gsum = (uint64_t) atoi(optarg);
-                break ;
-            case 't':
-                Gtimeout = atoi(optarg);
-                break ;
-            default:
-                help() ;
-                break ;
-            }
-    }
-        
-    // test parameters
-    if ( Gterms < 3 ) {
-        Gterms = 3 ;
-    }
-    if ( Gterms > MAXTERMS-1 ) {
-        Gterms = MAXTERMS-1 ;
-    }
-    if ( Gsum < 1 ) {
-        Gsum = 1 ;
-    }
+    MPI_Init( &argc, &argv ) ;
 
-    printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
+    MPI_Comm_rank( MPI_COMM_WORLD, &Grank ) ;
+    MPI_Comm_size( MPI_COMM_WORLD, &Gsize ) ;
 
-    // Timer handler
-    signal( SIGALRM, Timeout_handler);
-    if ( Gtimeout > 0 ) {
-        alarm( Gtimeout ) ;
-    }
+    CommunicationSetupPre() ;
 
-    // total timer
-    Gcounter = 0 ;
-
-    // start of elapsed time
-    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
-
-    int nPresets = argc - optind ;
-    if (nPresets <= 0) { 
-        // no presets
-        Gfrom = 2 ;
-        Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
-
-        // Solve
-        if ( Guntil == 0 ) {
-            Range_search( 0, Gfrom, Gto ) ;
-        } else {
-            Range_search( 0, Gfrom, Guntil ) ;
+    if ( Grank==Groot ) {
+        // MASTER
+        // Parse command line
+        int c;
+        int option_index ;
+        while ( (c = getopt_long( argc, argv, "t:r:hs:n:", long_options, &option_index )) != -1 ) {
+            //printf("opt=%c, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
+            switch (c) {
+                case 0:
+                    break ;
+                case 'h':
+                    help();
+                    break ;
+                case 'n':
+                    Gterms = (uint64_t) atoi(optarg);
+                    break ;
+                case 'r':
+                    Guntil = (uint64_t) atoi(optarg);
+                    break ;
+                case 's':
+                    Gsum = (uint64_t) atoi(optarg);
+                    break ;
+                case 't':
+                    Gtimeout = atoi(optarg);
+                    break ;
+                default:
+                    help() ;
+                    break ;
+                }
         }
-        Timer_out(eYes) ;
+            
+        // test parameters
+        if ( Gterms < 3 ) {
+            Gterms = 3 ;
+        }
+        if ( Gterms > MAXTERMS-1 ) {
+            Gterms = MAXTERMS-1 ;
+        }
+        if ( Gsum < 1 ) {
+            Gsum = 1 ;
+        }
 
+        printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
+
+        // Timer handler
+        signal( SIGALRM, Timeout_handler);
+        if ( Gtimeout > 0 ) {
+            alarm( Gtimeout ) ;
+        }
+
+        // total timer
+        Gcounter = 0 ;
+
+        // start of elapsed time
+        clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
+
+        int nPresets = argc - optind ;
+        if (nPresets <= 0) { 
+            // no presets
+            Gfrom = 2 ;
+            Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
+
+            // Solve
+            if ( Guntil == 0 ) {
+                Range_search( 0, Gfrom, Gto ) ;
+            } else {
+                Range_search( 0, Gfrom, Guntil ) ;
+            }
+            Timer_out(eYes) ;
+
+        } else {
+            // Add presets first
+            int index = -1 ;
+            for ( int i = 0; i < nPresets; ++i) {
+                ++ index ;
+                if ( index == Gterms-2 ) {
+                    --index ;
+                    fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
+                    Guntil = 0 ;
+                }
+                if ( Add_preset( index, atoll(argv[i]) ) == eError ) {
+                    return Timer_out(eError) ;
+                }
+            }
+
+            // estimage range of next level after presets
+            Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
+            if ( Gfrom < G[index].val + Gsum ) {
+                Gfrom = G[index].val + Gsum ;
+            }
+            Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
+
+            // Solve
+            if ( Guntil < G[index].val ) {
+                Range_search( index, G[index].val, G[index].val ) ;
+            } else {
+                Range_search( index, G[index].val, Guntil ) ;
+            }
+            Timer_out(eYes) ;
+        }
     } else {
-        // Add presets first
-        int index = -1 ;
-        for ( int i = 0; i < nPresets; ++i) {
-            ++ index ;
-            if ( index == Gterms-2 ) {
-                --index ;
-                fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
-                Guntil = 0 ;
-            }
-            if ( Add_preset( index, atoll(argv[i]) ) == eError ) {
-                return Timer_out(eError) ;
-            }
-        }
-
-        // estimage range of next level after presets
-        Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
-        if ( Gfrom < G[index].val + Gsum ) {
-            Gfrom = G[index].val + Gsum ;
-        }
-        Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
-
-        // Solve
-        if ( Guntil < G[index].val ) {
-            Range_search( index, G[index].val, G[index].val ) ;
-        } else {
-            Range_search( index, G[index].val, Guntil ) ;
-        }
-        Timer_out(eYes) ;
+        // WORKER
     }
 
     return 0 ;
