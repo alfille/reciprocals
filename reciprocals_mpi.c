@@ -45,8 +45,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <setjmp.h>
 #include <math.h>
 #include <inttypes.h>
 #include <getopt.h>
@@ -58,39 +60,40 @@ struct sSetup {
     uint32_t sum ;
     uint32_t timeout ;
 } xSetup ;
-MPI_Datatype sSetup_type ;
+MPI_Datatype Setup_t ;
 
 struct sJob {
     uint32_t nPresets ;
     uint64_t until ;
     uint64_t presets[0] ; // Gterms, actually
 } xJob ;
-MPI_Datatype sJob_type ;
+MPI_Datatype Job_t ;
 int sJob_count = 3 ;
 
 struct sResponse {
     struct sJob job ;
-    uint32_t eStatus ;
+    uint32_t status ;
     uint64_t from ;
     uint64_t to ;
     uint64_t count ;
     double_t elapsed ;
 } xResponse ;
-MPI_Datatype sResponse_type ;
+MPI_Datatype Response_t ;
 
 #define MAXTERMS 1000000
 
-int       Gterms = 4;
-uint64_t  Gcounter ;
-uint64_t  Gsum = 1 ;
-uint64_t  Guntil = 0 ;
+int        Gterms = 4;
+uint64_t   Gcounter ;
+uint64_t   Gsum = 1 ;
+uint64_t   Guntil = 0 ;
 struct timespec Gtime ;
-int       Gtimeout = 0 ;
-uint64_t  Gfrom ;
-uint64_t  Gto ;
-int       Grank ; // MPI rank 
-int       Gsize ; // MPI size
-const int Groot = 0 ;
+int        Gtimeout = 0 ;
+uint64_t   Gfrom ;
+uint64_t   Gto ;
+int        Grank ; // MPI rank 
+int        Gsize ; // MPI size
+const int  Groot = 0 ;
+sigjmp_buf Gmark_spot ;
 
 uint64_t normalize_threshold = 1000000000000 ;
 
@@ -102,17 +105,7 @@ struct fraction{
 
 typedef enum { eNo = 0, eYes = 1, eError = 2, eTimeout = 3 } search_more ;
 
-search_more SetupSlave( struct sSetup* s ) {
-    Gterms = s->number ;
-    if ( Gterms < 3 || Gterms > MAXTERMS ) {
-        return eError ;
-    }
-    Gsum = s->sum ;
-    if ( Gsum < 1 ) {
-        return eError ;
-    }
-    Gtimeout = s->timeout ;
-}
+typedef enum { mJob, mResponse } mMessage ;
 
 void CommunicationSetupPre(void) {
     // Setup before number of terms is known
@@ -126,9 +119,9 @@ void CommunicationSetupPre(void) {
         offsetof(struct sSetup, sum),
         offsetof(struct sSetup, timeout)
     } ;
-    MPI_Datatype sSetup_types[] = { MPI_UINT64_T, MPI_UINT32_T, MPI_UINT32_T } ;
-    MPI_Type_create_struct( sSetup_count, sSetup_blocklen, sSetup_offset, sSetup_types, &sSetup_type ) ;
-    MPI_Type_commit( &sSetup_type ) ;
+    MPI_Datatype Setup_ts[] = { MPI_UINT64_T, MPI_UINT32_T, MPI_UINT32_T } ;
+    MPI_Type_create_struct( sSetup_count, sSetup_blocklen, sSetup_offset, Setup_ts, &Setup_t ) ;
+    MPI_Type_commit( &Setup_t ) ;
 }
 
 void CommunicationSetupPost(void) {
@@ -142,24 +135,24 @@ void CommunicationSetupPost(void) {
         offsetof(struct sJob, until),
         offsetof(struct sJob, presets)
     } ;
-    MPI_Datatype sJob_types[] = { MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T } ;
-    MPI_Type_create_struct( sJob_count, sJob_blocklen, sJob_offset, sJob_types, &sJob_type ) ; 
-    MPI_Type_commit( &sJob_type ) ;
+    MPI_Datatype Job_ts[] = { MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T } ;
+    MPI_Type_create_struct( sJob_count, sJob_blocklen, sJob_offset, Job_ts, &Job_t ) ; 
+    MPI_Type_commit( &Job_t ) ;
 
     // Response
     int sResponse_count = 6 ;
     int sResponse_blocklen[] = {1,1,1,1,1,1} ;
     MPI_Aint sResponse_offset[] = {
         offsetof(struct sResponse, job),
-        offsetof(struct sResponse, eStatus),
+        offsetof(struct sResponse, status),
         offsetof(struct sResponse, from),
         offsetof(struct sResponse, to),
         offsetof(struct sResponse, count),
         offsetof(struct sResponse, elapsed)
     } ;
-    MPI_Datatype sResponse_types[] = { sJob_type, MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T, MPI_UINT64_T, MPI_DOUBLE } ;
-    MPI_Type_create_struct( sResponse_count, sResponse_blocklen, sResponse_offset, sResponse_types, &sResponse_type ) ;
-    MPI_Type_commit( &sResponse_type ) ;
+    MPI_Datatype Response_ts[] = { Job_t, MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T, MPI_UINT64_T, MPI_DOUBLE } ;
+    MPI_Type_create_struct( sResponse_count, sResponse_blocklen, sResponse_offset, Response_ts, &Response_t ) ;
+    MPI_Type_commit( &Response_t ) ;
 }    
 
 search_more Lastterm( struct fraction * pfrac_old ) {
@@ -350,40 +343,23 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
     return eYes ;
 }
 
-search_more Timer_out( search_more status ) {
-    /* For "--timer" mode
-     * print 3 comma-separared values
-     *   1. time elapsed
-     *       seconds, (double)
-     *   2. count of solutions
-     *       integer (uint64_t)
-     *   3. completion mode
-     *       string, in quotes 
-     *       "eYes"   -- more solutions possible available incrementing last preset value
-     *       "eNo"    -- no more solutions possible available incrementing last preset value
-     *       "eError" -- error in presets -- see stderr
-     *
-     * Even with error, the 3 values will be shown
-     * */
+void SendResponse( search_more status ) {
+	// Clear alarm
+	alarm( 0 ) ;
 
     // calc time
     struct timespec now;
     clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &now ) ;
-    double elapsed = now.tv_sec - Gtime.tv_sec + 10E-9 * ( now.tv_nsec - Gtime.tv_nsec );
-    
-    // print results
-    switch ( status ) {
-        case eError:
-            printf( "%g, %" PRIu64 ",\"%s\"\n", elapsed, Gcounter, "eError" ) ;
-            break ;
-        case eYes:
-            printf( "%g, %" PRIu64 ",\"%s\"\n", elapsed, Gcounter, "eYes" ) ;
-            break ;
-        case eNo:
-            printf( "%g, %" PRIu64 ",\"%s\"\n", elapsed, Gcounter, "eNo" ) ;
-            break ;
-    }
-    return status ;
+	
+	// Full struct
+	memcpy( &xResponse.job, &xJob, sizeof( struct sJob ) );
+	xResponse.count = Gcounter ;
+	xResponse.status = status ;
+	xResponse.from = Gfrom ;
+	xResponse.to = Gto ;
+	xResponse.elapsed = now.tv_sec - Gtime.tv_sec + 10E-9 * ( now.tv_nsec - Gtime.tv_nsec );
+	
+	MPI_Send( &xResponse, 1, Response_t, Groot, mResponse, MPI_COMM_WORLD ) ;
 }
 
 search_more Range_search( int index, uint64_t from, uint64_t to ) {
@@ -394,34 +370,29 @@ search_more Range_search( int index, uint64_t from, uint64_t to ) {
             case eYes:
                 break ;
             case eNo:
-                return Timer_out( eNo ) ;
+                return eNo ;
             case eError:
-                return Timer_out( eError ) ;
+                return eError ;
         }
     }
-    return Timer_out(eYes) ;
-}
-
-void Range_out( uint64_t from, uint64_t to ) {
-    //printf("%" PRIu64 ", %" PRIu64 "\n" , from, to );
-    if ( (from==0) || (from>to) ) {
-        to = 0 ;
-        from = 0 ;
-    } 
-    printf("%" PRIu64 ", %" PRIu64 "\n" , from, to );
+    return eYes ;
 }
 
 void Timeout_handler( int sig ) {
-    printf("%" PRIu64 ", %" PRIu64 ", timeout\n",Gfrom, Gto ) ;
-    exit(1);
+	siglongjmp( Gmark_spot, -1 ) ;
 }
 
 void WorkerSetup( void ) {
     // Broadcast parameters to all workers
+
+	// Load struct
     xSetup.number = Gterms ;
     xSetup.sum = Gsum ;
     xSetup.timeout = Gtimeout ;
-    MPI_Bcast( &xSetup, 1, sSetup_type, Groot, MPI_COMM_WORLD ) ;
+
+    MPI_Bcast( &xSetup, 1, Setup_t, Groot, MPI_COMM_WORLD ) ;
+
+	// Unload Struct
     Gterms = xSetup.number ;
     Gsum = xSetup.sum ;
     Gtimeout = xSetup.timeout ;
@@ -430,7 +401,73 @@ void WorkerSetup( void ) {
 
     CommunicationSetupPost() ;
 }
-        
+
+void GetJob( void ) {
+	// For Workers only
+	
+	MPI_Recv( &xJob, 1, Job_t, Groot, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
+	
+	// total counter
+	Gcounter = 0 ;
+
+	// start of elapsed time
+	clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
+	
+	if ( sigsetjmp( Gmark_spot, 1 ) == 0 ) {
+		SendResponse( eTimeout ) ;
+		return ;
+	}
+
+	// Timer handler
+	signal( SIGALRM, Timeout_handler);
+	alarm( Gtimeout ) ;
+
+	
+	if ( xJob.nPresets <= 0) { 
+		// no presets
+		Gfrom = 2 ;
+		Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
+
+		// Solve
+		if ( Guntil == 0 ) {
+			SendResponse( Range_search( 0, Gfrom, Gto ) ) ;
+		} else {
+			SendResponse( Range_search( 0, Gfrom, Guntil ) ) ;
+		}
+		return ;
+
+	} else {
+		// Add presets first
+		int index = -1 ;
+		for ( int i = 0; i < xJob.nPresets; ++i) {
+			++ index ;
+			if ( index == Gterms-2 ) {
+				--index ;
+				fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
+				Guntil = 0 ;
+			}
+			if ( Add_preset( index, xJob.presets[i]	 ) == eError ) {
+				SendResponse( eError ) ;
+				return ;
+			}
+		}
+
+		// estimage range of next level after presets
+		Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
+		if ( Gfrom < G[index].val + Gsum ) {
+			Gfrom = G[index].val + Gsum ;
+		}
+		Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
+
+		// Solve
+		if ( Guntil < G[index].val ) {
+			SendResponse( Range_search( index, G[index].val, G[index].val ) );
+		} else {
+			SendResponse( Range_search( index, G[index].val, Guntil ) ) ;
+		}
+		return ;
+	}
+}        
 
 void help() {
     printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
@@ -517,65 +554,18 @@ int main( int argc, char * argv[] ) {
 
         printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
 
-        // Timer handler
-        signal( SIGALRM, Timeout_handler);
-        if ( Gtimeout > 0 ) {
-            alarm( Gtimeout ) ;
-        }
-
-        // total timer
-        Gcounter = 0 ;
-
-        // start of elapsed time
-        clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
-
-        int nPresets = argc - optind ;
-        if (nPresets <= 0) { 
-            // no presets
-            Gfrom = 2 ;
-            Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
-
-            // Solve
-            if ( Guntil == 0 ) {
-                Range_search( 0, Gfrom, Gto ) ;
-            } else {
-                Range_search( 0, Gfrom, Guntil ) ;
-            }
-            Timer_out(eYes) ;
-
-        } else {
-            // Add presets first
-            int index = -1 ;
-            for ( int i = 0; i < nPresets; ++i) {
-                ++ index ;
-                if ( index == Gterms-2 ) {
-                    --index ;
-                    fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
-                    Guntil = 0 ;
-                }
-                if ( Add_preset( index, atoll(argv[i]) ) == eError ) {
-                    return Timer_out(eError) ;
-                }
-            }
-
-            // estimage range of next level after presets
-            Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
-            if ( Gfrom < G[index].val + Gsum ) {
-                Gfrom = G[index].val + Gsum ;
-            }
-            Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
-
-            // Solve
-            if ( Guntil < G[index].val ) {
-                Range_search( index, G[index].val, G[index].val ) ;
-            } else {
-                Range_search( index, G[index].val, Guntil ) ;
-            }
-            Timer_out(eYes) ;
-        }
+	}
+	
+	WorkerSetup() ;
+		
+	if ( Grank == Groot ) {
     } else {
-        // WORKER
+		while (1) {
+			GetJob() ;
+		}
     }
+
+	MPI_Finalize() ;
 
     return 0 ;
 }
