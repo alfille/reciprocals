@@ -33,19 +33,17 @@
 //      Guntil
 
 // To Master
-//   Presets
-//   Preset length
+//   Rank
 //   Guntil
 //   Status
 //   Count
 //   Range[2]
-//   elapsed
+//   Elapsed
 
 
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <setjmp.h>
@@ -66,12 +64,12 @@ struct sJob {
     uint32_t nPresets ;
     uint64_t until ;
     uint64_t presets[0] ; // Gterms, actually
-} xJob ;
+} ;
+struct sJob * pJob ;
 MPI_Datatype Job_t ;
-int sJob_count = 3 ;
 
 struct sResponse {
-    struct sJob job ;
+    int      rank ;
     uint32_t status ;
     uint64_t from ;
     uint64_t to ;
@@ -129,6 +127,9 @@ void CommunicationSetupPost(void) {
     // Create the message struct as a defined MPI Datatype
 
     // Job 
+    pJob = malloc( sizeof( struct sJob ) + Gterms * sizeof( uint64_t ) ) ;
+        
+    int sJob_count = 3 ;
     int sJob_blocklen[] = {1,1,Gterms} ;
     MPI_Aint sJob_offset[] = {
         offsetof(struct sJob, nPresets),
@@ -143,14 +144,14 @@ void CommunicationSetupPost(void) {
     int sResponse_count = 6 ;
     int sResponse_blocklen[] = {1,1,1,1,1,1} ;
     MPI_Aint sResponse_offset[] = {
-        offsetof(struct sResponse, job),
+        offsetof(struct sResponse, rank),
         offsetof(struct sResponse, status),
         offsetof(struct sResponse, from),
         offsetof(struct sResponse, to),
         offsetof(struct sResponse, count),
         offsetof(struct sResponse, elapsed)
     } ;
-    MPI_Datatype Response_ts[] = { Job_t, MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T, MPI_UINT64_T, MPI_DOUBLE } ;
+    MPI_Datatype Response_ts[] = { MPI_INT, MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T, MPI_UINT64_T, MPI_DOUBLE } ;
     MPI_Type_create_struct( sResponse_count, sResponse_blocklen, sResponse_offset, Response_ts, &Response_t ) ;
     MPI_Type_commit( &Response_t ) ;
 }    
@@ -352,11 +353,11 @@ void SendResponse( search_more status ) {
     clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &now ) ;
 	
 	// Full struct
-	memcpy( &xResponse.job, &xJob, sizeof( struct sJob ) );
-	xResponse.count = Gcounter ;
-	xResponse.status = status ;
-	xResponse.from = Gfrom ;
-	xResponse.to = Gto ;
+	xResponse.rank    = Grank ;
+	xResponse.count   = Gcounter ;
+	xResponse.status  = status ;
+	xResponse.from    = Gfrom ;
+	xResponse.to      = Gto ;
 	xResponse.elapsed = now.tv_sec - Gtime.tv_sec + 10E-9 * ( now.tv_nsec - Gtime.tv_nsec );
 	
 	MPI_Send( &xResponse, 1, Response_t, Groot, mResponse, MPI_COMM_WORLD ) ;
@@ -402,10 +403,15 @@ void WorkerSetup( void ) {
     CommunicationSetupPost() ;
 }
 
-void GetJob( void ) {
+search_more GetJob( void ) {
 	// For Workers only
 	
-	MPI_Recv( &xJob, 1, Job_t, Groot, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
+	MPI_Recv( pJob, 1, Job_t, Groot, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
+	
+	if ( pJob->nPresets == Gterms ) {
+		// Trigger for end of run
+		return eNo ;
+	}
 	
 	// total counter
 	Gcounter = 0 ;
@@ -413,9 +419,9 @@ void GetJob( void ) {
 	// start of elapsed time
 	clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
 	
-	if ( sigsetjmp( Gmark_spot, 1 ) == 0 ) {
+	if ( sigsetjmp( Gmark_spot, 1 ) != 0 ) {
 		SendResponse( eTimeout ) ;
-		return ;
+		return eYes ;
 	}
 
 	// Timer handler
@@ -423,7 +429,7 @@ void GetJob( void ) {
 	alarm( Gtimeout ) ;
 
 	
-	if ( xJob.nPresets <= 0) { 
+	if ( pJob->nPresets <= 0) { 
 		// no presets
 		Gfrom = 2 ;
 		Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
@@ -434,21 +440,21 @@ void GetJob( void ) {
 		} else {
 			SendResponse( Range_search( 0, Gfrom, Guntil ) ) ;
 		}
-		return ;
+		return eYes ;
 
 	} else {
 		// Add presets first
 		int index = -1 ;
-		for ( int i = 0; i < xJob.nPresets; ++i) {
+		for ( int i = 0; i < pJob->nPresets; ++i) {
 			++ index ;
 			if ( index == Gterms-2 ) {
 				--index ;
 				fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
 				Guntil = 0 ;
 			}
-			if ( Add_preset( index, xJob.presets[i]	 ) == eError ) {
+			if ( Add_preset( index, pJob->presets[i]	 ) == eError ) {
 				SendResponse( eError ) ;
-				return ;
+				return eYes ;
 			}
 		}
 
@@ -465,7 +471,7 @@ void GetJob( void ) {
 		} else {
 			SendResponse( Range_search( index, G[index].val, Guntil ) ) ;
 		}
-		return ;
+		return eYes ;
 	}
 }        
 
@@ -499,10 +505,63 @@ struct option long_options[] =
     {0          ,   0          ,       0,   0}
 };
 
-int main( int argc, char * argv[] ) {
+void ParseCommandLine( int argc, char * argv[] ) {
     // defaults
     Gsum = 1 ;
 
+    // Parse command line
+    int c;
+    int option_index ;
+    while ( (c = getopt_long( argc, argv, "t:r:hs:n:", long_options, &option_index )) != -1 ) {
+        //printf("opt=%c, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
+        switch (c) {
+            case 0:
+                break ;
+            case 'h':
+                help();
+                break ;
+            case 'n':
+                Gterms = (uint64_t) atoi(optarg);
+                break ;
+            case 'r':
+                Guntil = (uint64_t) atoi(optarg);
+                break ;
+            case 's':
+                Gsum = (uint64_t) atoi(optarg);
+                break ;
+            case 't':
+                Gtimeout = atoi(optarg);
+                break ;
+            default:
+                help() ;
+                break ;
+            }
+    }
+        
+    // test parameters
+    if ( Gterms < 3 ) {
+        Gterms = 3 ;
+    }
+    if ( Gterms > MAXTERMS-1 ) {
+        Gterms = MAXTERMS-1 ;
+    }
+    if ( Gsum < 1 ) {
+        Gsum = 1 ;
+    }
+}
+
+void RootSetup( void ) {
+	struct wJob {
+		uint64_t nPresets ;
+		uint64_t until ;
+		uint64_t presets[Gterms];
+		int status ;
+	} ;
+	struct wJob * pJob = calloc( Gsize, sizeof( struct wJob ) );
+	
+}
+
+int main( int argc, char * argv[] ) {
     MPI_Init( &argc, &argv ) ;
 
     MPI_Comm_rank( MPI_COMM_WORLD, &Grank ) ;
@@ -512,57 +571,17 @@ int main( int argc, char * argv[] ) {
 
     if ( Grank==Groot ) {
         // MASTER
-        // Parse command line
-        int c;
-        int option_index ;
-        while ( (c = getopt_long( argc, argv, "t:r:hs:n:", long_options, &option_index )) != -1 ) {
-            //printf("opt=%c, index=%d, val=%s\n",c,option_index, long_options[option_index].name);
-            switch (c) {
-                case 0:
-                    break ;
-                case 'h':
-                    help();
-                    break ;
-                case 'n':
-                    Gterms = (uint64_t) atoi(optarg);
-                    break ;
-                case 'r':
-                    Guntil = (uint64_t) atoi(optarg);
-                    break ;
-                case 's':
-                    Gsum = (uint64_t) atoi(optarg);
-                    break ;
-                case 't':
-                    Gtimeout = atoi(optarg);
-                    break ;
-                default:
-                    help() ;
-                    break ;
-                }
-        }
-            
-        // test parameters
-        if ( Gterms < 3 ) {
-            Gterms = 3 ;
-        }
-        if ( Gterms > MAXTERMS-1 ) {
-            Gterms = MAXTERMS-1 ;
-        }
-        if ( Gsum < 1 ) {
-            Gsum = 1 ;
-        }
-
+        ParseCommandLine( argc, argv ) ;
         printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
-
 	}
 	
 	WorkerSetup() ;
 		
 	if ( Grank == Groot ) {
+		RootSetup() ;
     } else {
-		while (1) {
-			GetJob() ;
-		}
+		do {
+		} while ( GetJob() == eYes ) ;
     }
 
 	MPI_Finalize() ;

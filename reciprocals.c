@@ -21,22 +21,24 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <setjmp.h>
 #include <math.h>
 #include <inttypes.h>
 #include <getopt.h>
 #include <time.h>
 
-#define MAXLENGTH 1000000
+#define MAXTERMS 1000000
 
-int Gshow_sequence ;
-int Glength = 4;
-uint64_t Gcounter ;
-uint64_t Gsum = 1 ;
-uint64_t Guntil = 0 ;
+int        Gshow_sequence ;
+int        Gterms = 4;
+uint64_t   Gcounter ;
+uint64_t   Gsum = 1 ;
+uint64_t   Guntil = 0 ;
 struct timespec Gtime ;
-int Gtimeout = 0 ;
-uint64_t Gfrom ;
-uint64_t Gto ;
+int        Gtimeout = 0 ;
+uint64_t   Gfrom ;
+uint64_t   Gto ;
+sigjmp_buf Gmark_spot ;
 
 uint64_t normalize_threshold = 1000000000000 ;
 
@@ -44,9 +46,9 @@ struct fraction{
     uint64_t val ; // 1/val
     uint64_t num ; // cumulative diff numerator
     uint64_t den ; // cumulative diff denominator
-} G[ MAXLENGTH ] ;
+} G[ MAXTERMS ] ;
 
-typedef enum { no_more=0, yes_more = 1, error_more = 2 } search_more ;
+typedef enum { eNo = 0, eYes = 1, eError = 2, eTimeout = 3 } search_more ;
 
 search_more Lastterm( struct fraction * pfrac_old ) {
     // Last fraction -- easier calculation because either it a reciprocal or not. No search required
@@ -58,7 +60,7 @@ search_more Lastterm( struct fraction * pfrac_old ) {
     uint64_t val = ( den / ( num * Gsum ) ) * Gsum ;
     
     if ( val < init_val ) {
-        return no_more ;
+        return eNo ;
     }
     if ( val * num == den ) {
         // solution found
@@ -66,19 +68,19 @@ search_more Lastterm( struct fraction * pfrac_old ) {
         pfrac_new->val = val ;
         if (Gshow_sequence) {
             printf("[ ");
-            for ( int i=0 ; i<Glength ; ++i ) {
+            for ( int i=0 ; i<Gterms ; ++i ) {
                 printf("%" PRIu64 " ",G[i].val);
             }
             printf("]\n");
         }
     }
-    return val != init_val ? yes_more : no_more ;
+    return val != init_val ? eYes : eNo ;
 }
         
 search_more Lastterm_for_1( struct fraction * pfrac_old ) {
     // Last fraction -- easier calculation because either it a reciprocal or not. No search required
     // Special for "summing to one"
-    //printf("late entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",Glength-1,pfrac_old->val,pfrac_old->num,pfrac_old->den);
+    //printf("late entry index=%" PRIu64 ", val=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 "\n",Gterms-1,pfrac_old->val,pfrac_old->num,pfrac_old->den);
     struct fraction * pfrac_new = pfrac_old + 1 ;
     uint64_t den = pfrac_old->den ;
     uint64_t num = pfrac_old->num ;
@@ -86,7 +88,7 @@ search_more Lastterm_for_1( struct fraction * pfrac_old ) {
     uint64_t val = den / num ;
     
     if ( val < init_val ) {
-        return no_more ;
+        return eNo ;
     }
     if ( val * num == den ) {
         // solution found
@@ -95,13 +97,13 @@ search_more Lastterm_for_1( struct fraction * pfrac_old ) {
         if (Gshow_sequence) {
             int i ;
             printf("[ ");
-            for ( i=0 ; i<Glength ; ++i ) {
+            for ( i=0 ; i<Gterms ; ++i ) {
                 printf("%" PRIu64 " ",G[i].val);
             }
             printf("]\n");
         }
     }
-    return val != init_val ? yes_more : no_more ; 
+    return val != init_val ? eYes : eNo ; 
 }
 
 uint64_t gcd( uint64_t a, uint64_t b ) {
@@ -163,8 +165,8 @@ search_more Midterm( uint64_t index, struct fraction * pfrac_old ) {
         pfrac_new->den = pre_den * val ;
         pfrac_new->val = val ;
 
-        if ( ((index<Glength-2)?Midterm( index+1, pfrac_new ):Lastterm(pfrac_new)) == no_more ) {
-            return val != init_val ? yes_more : no_more ;
+        if ( ((index<Gterms-2)?Midterm( index+1, pfrac_new ):Lastterm(pfrac_new)) == eNo ) {
+            return val != init_val ? eYes : eNo ;
         }
 
         val += Gsum;
@@ -202,8 +204,8 @@ search_more Midterm_for_1( uint64_t index, struct fraction * pfrac_old ) {
         pfrac_new->den = pre_den * val ;
         pfrac_new->val = val ;
 
-        if ( ((index<Glength-2)?Midterm_for_1( index+1, pfrac_new ):Lastterm_for_1(pfrac_new)) == no_more ) {
-            return val != init_val ? yes_more : no_more ;
+        if ( ((index<Gterms-2)?Midterm_for_1( index+1, pfrac_new ):Lastterm_for_1(pfrac_new)) == eNo ) {
+            return val != init_val ? eYes : eNo ;
         }
 
         val += 1;
@@ -215,13 +217,13 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
     if ( val % Gsum != 0 ) {
         // bad val -- not divisible by Gsum
         fprintf( stderr, "Error: preset value %" PRIu64 " not divisible by %" PRIu64 "\n", val, Gsum );
-        return error_more ;
+        return eError ;
     }
     
     if ( index == 0 ) {
         if ( val < 2 * Gsum ) {
             fprintf( stderr, "Error: first preset value %" PRIu64 " not minimum %" PRIu64 "\n", val, 2 * Gsum );
-            return error_more ;
+            return eError ;
         }
         G[index].num = val-1 ;
         G[index].den = val ;
@@ -230,13 +232,13 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
         if ( val < G[index-1].val + Gsum ) {
             // test that values are increasing
             fprintf( stderr, "Error: preset value %" PRIu64 " not greater than prior preset %" PRIu64 "\n", val, G[index-1].val );
-            return error_more ;
+            return eError ;
         }
         G[index].num = G[index-1].num * val ;
         if ( G[index].num <= G[index-1].den ) {
             // test that difference is still positive
             fprintf( stderr, "Error: sum at preset value %" PRIu64 " not less than than 1\n", val );
-            return error_more ;
+            return eError ;
         }
         G[index].num -= G[index-1].den ;
         G[index].den = G[index-1].den * val ;
@@ -248,24 +250,12 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
         G[index].val = val ;
     }
     //printf("Preset add: index=%" PRIu64 ", num=%" PRIu64 ", den=%" PRIu64 ", val=%" PRIu64 "\n",index,G[index].num,G[index].den,G[index].val);
-    return yes_more ;
+    return eYes ;
 }
 
-search_more Timer_out( search_more status ) {
-    /* For "--timer" mode
-     * print 3 comma-separared values
-     *   1. time elapsed
-     *       seconds, (double)
-     *   2. count of solutions
-     *       integer (uint64_t)
-     *   3. completion mode
-     *       string, in quotes 
-     *       "yes_more"   -- more solutions possible available incrementing last preset value
-     *       "no_more"    -- no more solutions possible available incrementing last preset value
-     *       "error_more" -- error in presets -- see stderr
-     *
-     * Even with error, the 3 values will be shown
-     * */
+void SendResponse( search_more status ) {
+	// Clear alarm
+	alarm( 0 ) ;
 
     // calc time
     struct timespec now;
@@ -274,17 +264,19 @@ search_more Timer_out( search_more status ) {
     
     // print results
     switch ( status ) {
-        case error_more:
-            printf( "%g, %" PRIu64 ",\"%s\"\n", elapsed, Gcounter, "error_more" ) ;
+        case eError:
+            printf( "Solutions = %" PRIu64 ", Elapsed = %g sec, %s\n", Gcounter, elapsed, "Error encountered" ) ;
             break ;
-        case yes_more:
-            printf( "%g, %" PRIu64 ",\"%s\"\n", elapsed, Gcounter, "yes_more" ) ;
+        case eYes:
+            printf( "Solutions = %" PRIu64 ", Elapsed = %g sec, %s\n", Gcounter, elapsed, "Search incomplete" ) ;
             break ;
-        case no_more:
-            printf( "%g, %" PRIu64 ",\"%s\"\n", elapsed, Gcounter, "no_more" ) ;
+        case eNo:
+            printf( "Solutions = %" PRIu64 ", Elapsed = %g sec, %s\n", Gcounter, elapsed, "Search complete" ) ;
+            break ;
+        case eTimeout:
+            printf( "Solutions = %" PRIu64 ", Elapsed = %g sec, Range [%" PRIu64 " to %" PRIu64 "], %s\n", Gcounter, elapsed, Gfrom, Gto, "Timed out" ) ;
             break ;
     }
-    return status ;
 }
 
 search_more Range_search( int index, uint64_t from, uint64_t to ) {
@@ -292,30 +284,85 @@ search_more Range_search( int index, uint64_t from, uint64_t to ) {
     for ( uint64_t v = from; v < to + Gsum ; v += Gsum ) {
         Add_preset( index , v ) ;
         switch ((Gsum==1) ? Midterm_for_1( index+1, &G[index] ) : Midterm( index+1, &G[index] ) ) {
-            case yes_more:
+            case eYes:
                 break ;
-            case no_more:
-                return Timer_out( no_more ) ;
-            case error_more:
-                return Timer_out( error_more ) ;
+            case eNo:
+                return eNo ;
+            case eError:
+                return eError ;
         }
     }
-    return Timer_out(yes_more) ;
-}
-
-void Range_out( uint64_t from, uint64_t to ) {
-    //printf("%" PRIu64 ", %" PRIu64 "\n" , from, to );
-    if ( (from==0) || (from>to) ) {
-        to = 0 ;
-        from = 0 ;
-    } 
-    printf("%" PRIu64 ", %" PRIu64 "\n" , from, to );
+    return eYes ;
 }
 
 void Timeout_handler( int sig ) {
-    printf("%" PRIu64 ", %" PRIu64 ", timeout\n",Gfrom, Gto ) ;
-    exit(1);
+	siglongjmp( Gmark_spot, -1 ) ;
 }
+
+void DoJob( int nPresets, char * presets[] ) {
+	// For Workers only
+	
+	// total counter
+	Gcounter = 0 ;
+
+	// start of elapsed time
+	clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
+	
+	if ( sigsetjmp( Gmark_spot, 1 ) != 0 ) {
+		SendResponse( eTimeout ) ;
+		return ;
+	}
+
+	// Timer handler
+	signal( SIGALRM, Timeout_handler);
+	alarm( Gtimeout ) ;
+
+	
+	if ( nPresets <= 0) { 
+		// no presets
+		Gfrom = 2 ;
+		Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
+
+		// Solve
+		if ( Guntil == 0 ) {
+			SendResponse( Range_search( 0, Gfrom, Gto ) ) ;
+		} else {
+			SendResponse( Range_search( 0, Gfrom, Guntil ) ) ;
+		}
+		return ;
+
+	} else {
+		// Add presets first
+		int index = -1 ;
+		for ( int i = 0; i < nPresets; ++i) {
+			++ index ;
+			if ( index == Gterms-2 ) {
+				--index ;
+				fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
+				Guntil = 0 ;
+			}
+			if ( Add_preset( index, atoll(presets[i]) ) == eError ) {
+				SendResponse( eError ) ;
+				return ;
+			}
+		}
+
+		// estimage range of next level after presets
+		Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
+		if ( Gfrom < G[index].val + Gsum ) {
+			Gfrom = G[index].val + Gsum ;
+		}
+		Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
+
+		// Solve
+		if ( Guntil < G[index].val ) {
+			SendResponse( Range_search( index, G[index].val, G[index].val ) );
+		} else {
+			SendResponse( Range_search( index, G[index].val, Guntil ) ) ;
+		}
+		return ;
+	}
+}        
 
 void help() {
     printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
@@ -327,7 +374,7 @@ void help() {
     printf("\twhere v1, v2 are prrset terms\n");
     printf("\nnote that v1, v2 must be distinct, increasing, and less than the target sum\n");
     printf("Options\n");
-    printf("\t-n%d\t--number\tnumber of terms in the sum (default %d)\n",Glength,Glength);
+    printf("\t-n%d\t--number\tnumber of terms in the sum (default %d)\n",Gterms,Gterms);
     printf("\t\tAll terms will be of form 1/v and distinct\n");
     printf("\t-s%d\t--sum\ttarget sum (default %d)\n",Gsum,Gsum);
     printf("\t-q\t--seq\tshow full sequences (default off)\n"); 
@@ -349,8 +396,7 @@ struct option long_options[] =
     {0          ,   0          ,       0,   0}
 };
 
-int main( int argc, char * argv[] ) {
-    
+void ParseCommandLine( int argc, char * argv[] ) {
     // defaults
     Gshow_sequence = 0 ;
     Gsum = 1 ;
@@ -370,7 +416,7 @@ int main( int argc, char * argv[] ) {
                 Gshow_sequence = 1 ;
                 break ;
             case 'n':
-                Glength = (uint64_t) atoi(optarg);
+                Gterms = (uint64_t) atoi(optarg);
                 break ;
             case 'r':
                 Guntil = (uint64_t) atoi(optarg);
@@ -388,74 +434,26 @@ int main( int argc, char * argv[] ) {
     }
         
     // test parameters
-    if ( Glength < 3 ) {
-        Glength = 3 ;
+    if ( Gterms < 3 ) {
+        Gterms = 3 ;
     }
-    if ( Glength > MAXLENGTH-1 ) {
-        Glength = MAXLENGTH-1 ;
+    if ( Gterms > MAXTERMS-1 ) {
+        Gterms = MAXTERMS-1 ;
     }
     if ( Gsum < 1 ) {
         Gsum = 1 ;
     }
+}	
 
-    printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Glength, Gsum );
+int main( int argc, char * argv[] ) {
 
-    // Timer handler
-    signal( SIGALRM, Timeout_handler);
-    if ( Gtimeout > 0 ) {
-        alarm( Gtimeout ) ;
-    }
+	ParseCommandLine( argc, argv ) ;
 
-    // total timer
-    Gcounter = 0 ;
-
-    // start of elapsed time
-    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
+    printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
 
     int nPresets = argc - optind ;
-    if (nPresets <= 0) { 
-        // no presets
-        Gfrom = 2 ;
-        Gto = Gsum * ( (uint64_t) ( 1.1 + (Glength) / (exp(Gsum)-1) ) ) ;
 
-        // Solve
-        if ( Guntil == 0 ) {
-            Range_search( 0, Gfrom, Gto ) ;
-        } else {
-            Range_search( 0, Gfrom, Guntil ) ;
-        }
-        Timer_out(yes_more) ;
-
-    } else {
-        // Add presets first
-        int index = -1 ;
-        for ( int i = 0; i < nPresets; ++i) {
-            ++ index ;
-            if ( index == Glength-2 ) {
-                --index ;
-                fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Glength-2);
-                Guntil = 0 ;
-            }
-            if ( Add_preset( index, atoll(argv[i]) ) == error_more ) {
-                return Timer_out(error_more) ;
-            }
-        }
-
-        // estimage range of next level after presets
-        Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
-        if ( Gfrom < G[index].val + Gsum ) {
-            Gfrom = G[index].val + Gsum ;
-        }
-        Gto = Gsum * ( (uint64_t) ( 1.1 + (Glength-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
-
-        // Solve
-        if ( Guntil < G[index].val ) {
-            Range_search( index, G[index].val, G[index].val ) ;
-        } else {
-            Range_search( index, G[index].val, Guntil ) ;
-        }
-        Timer_out(yes_more) ;
-    }
+    DoJob( nPresets, argv+optind ) ;
 
     return 0 ;
 }
