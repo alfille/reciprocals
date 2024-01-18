@@ -572,38 +572,31 @@ void freeFreeWorker( void ) {
 	free(pFreeWorker) ;
 }
 	
+void * vScratchJob ;	
+void * vRankJobs ;	
 void * vWorkQueue ;
 void * vvWorkQueue ;
 #define WORKQUEUE 1000000
 
-void allocWorkQueue(void) {
+void allocJobSpace(void) {
     struct wJob {
         uint64_t nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
-	vWorkQueue = ( struct wJob *) calloc( WORKQUEUE, sizeof( struct wJob ) ) ;
-	vvWorkQueue = ( struct wJob *) vWorkQueue ;
+    struct pScratch = ( struct wJob *) calloc( 1 + Gworkers + WORKQUEUE, sizeof( struct wJob ) ) ;
+    vScratchJob = pScratch ;
+	struct wJob * pRankJobs = pScratch + 1 ;
+	vRankJobs = pRankJobs ;
+	struct wJob * pWorkQueue = pRankJobs + Gworkers ;
+	vWorkQueue = pWorkQueue ;
+	vvWorkQueue = pWorkQueue ;
 }
 
-void freeWorkQueue( void ) {
-	free(vWorkQueue) ;
+void freeJobSpace( void ) {
+	free(vScratchJob) ;
 }
 
-void * vRankJobs ;	
-void allocRankJobs(void) {
-    struct wJob {
-        uint64_t nPresets ;
-        uint64_t until ;
-        uint64_t presets[Gterms-1];
-    } ;
-	vRankJobs = ( struct wJob *) calloc( Gworkers, sizeof( struct wJob ) ) ;
-}
-
-void freeRankJobs( void ) {
-	free(vRankJobs) ;
-}
-	
 void SendRank( rank ) {
     struct wJob {
         uint64_t nPresets ;
@@ -628,6 +621,46 @@ int getFreeWorker( void ) {
 	return pFreeWorker[nFW] ;
 }
 
+void LoadRank( int rank, void * vjob ) {
+    struct wJob {
+        uint64_t nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
+
+    struct wJob * pjob = vjob ;
+    struct wJob * pRankJobs = vRankJobs ;
+    memcpy( pRankJobs + rank, vjob, sizeof( struct wJob ) ;
+}
+
+void * addQueue( void * vjob ) {
+    struct wJob {
+        uint64_t nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
+    struct wJob * pjob = vjob ;
+    struct wJob * cWorkQueue = vvWorkQueue ;
+    memcpy( cWorkQueue, vjob, sizeof( struct wJob ) ;
+    ++ cWorkQueue ;
+    return cWorkQueue - 1 ;
+}
+	
+int isQueueEmpty( void ) {
+	return vWorkQueue == vvWorkQueue ;
+}
+	
+void getQueue( int rank ) {
+    struct wJob {
+        uint64_t nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
+    struct wJob * cWorkQueue = vvWorkQueue ;
+	-- cWorkQueue ;
+	LoadRank( rank, cWorkQueue ) ;
+}
+
 void RootSetup( void ) {
 	// Structure for Job with presets array specified. 
 	// Have to do everything in this routine because C has no nested subroutines. 
@@ -637,23 +670,8 @@ void RootSetup( void ) {
         uint64_t presets[Gterms-1];
     } ;
     
-	// pWorkerJob is the current job sent to each worker
-	// pWorkQueue is a stack of pending jobs (after a timeout split)
-	// pWorkerFree is a stack of free workers to be assigned jobs
-
-    struct wJob * pWorkerJob = calloc( Gworkers + WORKQUEUE, sizeof( struct wJob ) ); // allocate both contiguous for space efficiency
-    struct wJob * pWorkQueue = pwJob + Gsize ;
-    int *  pWorkerFree = calloc( GWorkers, sizeof(int) ) ;
-
-	// pointers to current spot
-	struct wJob * cWorkQueue = pWorkQueue ; // next available stack position
-	int nWF = Gworkers ; // next available worker
-    
-    for ( int i = 0 ; i < Gworkers ; ++i ) {
-        pWorkerFree[i] = i ;
-    }
-    
-    #define SendSlot( r ) MPI_Send( pWorkerJob + r, 1, Job_t, mJob, MPI_COMM_WORLD )
+	allocJobSpace() ;
+	allocFreeWorker() ;
     
     // Add Basic start:
     Gfrom = 2 ;
