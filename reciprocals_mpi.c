@@ -659,7 +659,7 @@ void SendOrQueue( void * vjob ) {
     }
 }
     
-void getQueue( int rank ) {
+void useQueue( int rank ) {
     struct wJob {
         uint64_t nPresets ;
         uint64_t until ;
@@ -668,11 +668,44 @@ void getQueue( int rank ) {
     struct wJob * cWorkQueue = vvWorkQueue ;
     -- cWorkQueue ;
     LoadRank( rank, cWorkQueue ) ;
+    SendRank( rank ) ;
+}
+
+void SplitJob( int rank ) {
+    //Use xResponse data too
+    struct wJob {
+        uint64_t nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
+    struct wJob * pRankJobs = vRankJobs ;
+    struct wJob * pR = pRankJobs + rank ;
+    struct wJob * pScratch = vScratchJob ;
+    int nps = pR->nPresets ;
+    
+    if ( nps > 0 && pR->until != pR->presets[nps-1] )
+        // This level splittable
+        memcpy( pScratch, pR, sizeof( struct wJob ) ) ;
+        pR->presets[nps-1] += Gsum ;
+        SendRank( rank ) ;
+        pScratch->until = pScratch->presets[nps-1] ;
+    } else {
+        // Split next level
+        ++ pR->nPresets ;
+        memcpy( pScratch, pR, sizeof( struct wJob ) ) ;
+        pR->presets[nps] = xResponse.from + Gsum ;
+        pR->until = xResponse.to ;
+        SendRank( rank ) ;
+        pScratch->presets[nps] = xResponse.from ;
+        pScratch->until = xResponse.from ;
+    }
+    SendOrQueue( pScratch ) ;
 }
 
 void RootSetup( void ) {
     // Structure for Job with presets array specified. 
     // Have to do everything in this routine because C has no nested subroutines. 
+
     struct wJob {
         uint64_t nPresets ;
         uint64_t until ;
@@ -697,38 +730,24 @@ void RootSetup( void ) {
     // Loop through waiting for results
     do {
         MPI_RECV( &xResponse, 1, Response_t, MPI_ANY_SOURCE, mResponse, MPI_STATUS_IGNORE ) ;
-        int r = xResponse.rank
         switch( xResponse.status ) {
             case eYes:
             case eNo:
             case eError:
                 // Successful search
                 Gcounter += xResponse.count ;
-                if ( cWorkQueue > pWorkQueue ) {
-                    // send a pending job back
-                        if ( i != Groot ) {
-            MPI_Send( pJob, 1, Job_t, i, mJob, MPI_COMM_WORLD ) ;
-        }
-    memcpy( pWorkerJob + r, cWorkQueue ) ;
-                    -- cWorkQueue ; 
-                    SendSlot( r ) ;
+                if ( isQueueEmpty() ) {
+                    addFreeWorker( rank ) ;
                 } else {
-                    // Add rank to Free
-                    ++ nWF ;
-                    pWorkerFree[ nWF ] = r ;            
+                    useQueue( rank ) ;
                 }
                 break ;
             case eTimeout:
                 // Unsuccessful, need to split
-                int np = pWorkerJob[r].nPresets ;
-                struct wJob * pwj = pWorkerJob + r ;
-                if ( np == 0 || pwj.presets[np-1] == pwj.until ) {
-                    // Split on next level
-                    
-                
-                
-    
-    
+                SplitJob( rank ) ;
+                break ;
+        }
+    while ( nFW < gWorkers ) ;
     
     // Close
     for ( int rank=0 ; rank < Gworkers ; ++rank ) {
