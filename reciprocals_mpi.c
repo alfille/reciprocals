@@ -46,6 +46,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <string.h>
 #include <setjmp.h>
 #include <math.h>
 #include <inttypes.h>
@@ -54,7 +55,7 @@
 #include <mpi.h>
 
 struct sSetup {
-    uint64_t number ;
+    uint64_t terms ;
     uint32_t sum ;
     uint32_t timeout ;
 } xSetup ;
@@ -90,8 +91,11 @@ uint64_t   Gfrom ;
 uint64_t   Gto ;
 int        Grank ; // MPI rank 
 int        Gsize ; // MPI size
-const int  Groot = 0 ;
+int        Groot ;
+int        Gworkers ;
 sigjmp_buf Gmark_spot ;
+
+#define GROOTS 1
 
 uint64_t normalize_threshold = 1000000000000 ;
 
@@ -113,7 +117,7 @@ void CommunicationSetupPre(void) {
     int sSetup_count = 3 ;
     int sSetup_blocklen[] = {1,1,1} ;
     MPI_Aint sSetup_offset[] = {
-        offsetof(struct sSetup, number),
+        offsetof(struct sSetup, terms),
         offsetof(struct sSetup, sum),
         offsetof(struct sSetup, timeout)
     } ;
@@ -385,17 +389,18 @@ void Timeout_handler( int sig ) {
 
 void WorkerSetup( void ) {
     // Broadcast parameters to all workers
+    CommunicationSetupPre() ;
 
     // Load struct
-    xSetup.number = Gterms ;
-    xSetup.sum = Gsum ;
+    xSetup.terms   = Gterms ;
+    xSetup.sum     = Gsum ;
     xSetup.timeout = Gtimeout ;
-
+    
     MPI_Bcast( &xSetup, 1, Setup_t, Groot, MPI_COMM_WORLD ) ;
 
     // Unload Struct
-    Gterms = xSetup.number ;
-    Gsum = xSetup.sum ;
+    Gterms   = xSetup.terms ;
+    Gsum     = xSetup.sum ;
     Gtimeout = xSetup.timeout ;
 
     printf("From %d, terms = %" PRIu64 "\n", Grank, Gterms) ;
@@ -550,51 +555,155 @@ void ParseCommandLine( int argc, char * argv[] ) {
     }
 }
 
+void * vWorkerJob ;
+int * pFreeWorker ;
+int nFW ;
+
+void allocFreeWorker(void) {
+	nFW = 0 ;
+	pFreeWorker = calloc( Gworkers, sizeof( int ) ) ;
+    for ( int rank = 0 ; rank < Gworkers ; ++rtank ) {
+        pFreeWorker[nFW] = rank ;
+        ++ nFW ;
+    }
+}
+
+void freeFreeWorker( void ) {
+	free(pFreeWorker) ;
+}
+	
+void * vWorkQueue ;
+void * vvWorkQueue ;
 #define WORKQUEUE 1000000
 
-void RootSetup( void ) {
+void allocWorkQueue(void) {
     struct wJob {
         uint64_t nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
-    struct wJob * pwJob = calloc( Gsize, sizeof( struct wJob ) );
-    struct wJob * pWorkQueue = calloc( WORKQUEUE, sizeof( struct wJob ) ) ;
-    int Ready[ Gsize ] ;
-    int nReady = gGsize -1 ; // index of next available worker
-    uint64_t nWQ = 0 ;
+	vWorkQueue = ( struct wJob *) calloc( WORKQUEUE, sizeof( struct wJob ) ) ;
+	vvWorkQueue = ( struct wJob *) vWorkQueue ;
+}
+
+void freeWorkQueue( void ) {
+	free(vWorkQueue) ;
+}
+
+void * vRankJobs ;	
+void allocRankJobs(void) {
+    struct wJob {
+        uint64_t nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
+	vRankJobs = ( struct wJob *) calloc( Gworkers, sizeof( struct wJob ) ) ;
+}
+
+void freeRankJobs( void ) {
+	free(vRankJobs) ;
+}
+	
+void SendRank( rank ) {
+    struct wJob {
+        uint64_t nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
+    struct wJob * pRankJobs = vRankJobs ;
+    MPI_Send( vRankJobs + rank, 1, Job_t, mJob, MPI_COMM_WORLD )
+}
+
+void addFreeWorker( rank ) {
+	pWorkerFree[ nWF ] = rank ;
+	++ nWF ;
+}
+
+int isFreeWorker( void ) {
+	return nWF > 0 ;
+}
+
+int getFreeWorker( void ) {
+	--nFW ;
+	return pWorkerFree[n
+
+void RootSetup( void ) {
+	// Structure for Job with presets array specified. 
+	// Have to do everything in this routine because C has no nested subroutines. 
+    struct wJob {
+        uint64_t nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
     
-    for ( int i = Groot ; i < Gsize ; ++i ) {
-        Ready[i] = i ;
+	// pWorkerJob is the current job sent to each worker
+	// pWorkQueue is a stack of pending jobs (after a timeout split)
+	// pWorkerFree is a stack of free workers to be assigned jobs
+
+    struct wJob * pWorkerJob = calloc( Gworkers + WORKQUEUE, sizeof( struct wJob ) ); // allocate both contiguous for space efficiency
+    struct wJob * pWorkQueue = pwJob + Gsize ;
+    int *  pWorkerFree = calloc( GWorkers, sizeof(int) ) ;
+
+	// pointers to current spot
+	struct wJob * cWorkQueue = pWorkQueue ; // next available stack position
+	int nWF = Gworkers ; // next available worker
+    
+    for ( int i = 0 ; i < Gworkers ; ++i ) {
+        pWorkerFree[i] = i ;
     }
+    
+    #define SendSlot( r ) MPI_Send( pWorkerJob + r, 1, Job_t, mJob, MPI_COMM_WORLD )
     
     // Add Basic start:
     Gfrom = 2 ;
     Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
-    for ( int i = Gfrom ; i <= Gto ; ++1 ) {
-        pwJob[nReady].nPresets = 1 ;
-        pwJob[nReady].presets[0] = i ;
-        if ( nReady == Groot+1 ) {
-            pwJob[nReady].until = Gto ;
-        } else {
-            pwJob[nReady].until = i ;
-        }
-        MPI_Send( pwJob + nReady, 1, Job_t, mJob, MPI_COMM_WORLD ) ;
-        --nReady
-        if ( nReady == Groot ) {
-            break ;
-        }
+    for ( int v = Gto ; v >= Gfrom ; --v ) {
+		if ( nWF > 0 ) {
+			// space in workers
+			int r = pWorkerFree[ nWF-1 ] ;
+			-- nWF ; 
+			pWorkerJob[r].nPresets   = 1 ;
+			pWorkerJob[r].presets[0] = v ;
+			pWorkerJob[r].until      = v ;
+			SendSlot( r ) ;
+		} else {
+			// space in WorkQueue
+			cWorkQueue.nPresets   = 1 ;
+			cWorkQueue.presets[0] = v ;
+			cWorkQueue.until      = v ;
+			++cWorkQueue ;
+		}
     }
     
     // Loop through waiting for results
     do {
         MPI_RECV( &xResponse, 1, Response_t, MPI_ANY_SOURCE, mResponse, MPI_STATUS_IGNORE ) ;
+		int r = xResponse.rank
         switch( xResponse.status ) {
             case eYes:
             case eNo:
             case eError:
+				// Successful search
                 Gcounter += xResponse.count ;
-                
+                if ( cWorkQueue > pWorkQueue ) {
+					// send a pending job back
+					memcpy( pWorkerJob + r, cWorkQueue ) ;
+					-- cWorkQueue ; 
+					SendSlot( r ) ;
+				} else {
+					// Add rank to Free
+					++ nWF ;
+					pWorkerFree[ nWF ] = r ;			
+				}
+				break ;
+			case eTimeout:
+				// Unsuccessful, need to split
+				int np = pWorkerJob[r].nPresets ;
+				struct wJob * pwj = pWorkerJob + r ;
+				if ( np == 0 || pwj.presets[np-1] == pwj.until ) {
+					// Split on next level
+					
+				
                 
     
     
@@ -616,8 +725,8 @@ int main( int argc, char * argv[] ) {
 
     MPI_Comm_rank( MPI_COMM_WORLD, &Grank ) ;
     MPI_Comm_size( MPI_COMM_WORLD, &Gsize ) ;
-
-    CommunicationSetupPre() ;
+    Groot    = Gsize - GROOTS ; // last worker "rank" is root
+    Gworkers = Gsize - GROOTS ; // rest are workers (index from 0)
 
     if ( Grank==Groot ) {
         // MASTER
@@ -625,11 +734,13 @@ int main( int argc, char * argv[] ) {
         printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
     }
     
-    WorkerSetup() ;
+    WorkerSetup() ; // Send command-line derived parameters to all workers, set up message field sizes
         
     if ( Grank == Groot ) {
+		// root process
         RootSetup() ;
     } else {
+		// worker process (in a loop)
         do {
         } while ( GetJob() == eYes ) ;
     }
