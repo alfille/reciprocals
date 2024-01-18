@@ -560,8 +560,8 @@ int * pFreeWorker ;
 int nFW ;
 
 void allocFreeWorker(void) {
-	nFW = 0 ;
-	pFreeWorker = calloc( Gworkers, sizeof( int ) ) ;
+    nFW = 0 ;
+    pFreeWorker = calloc( Gworkers, sizeof( int ) ) ;
     for ( int rank = 0 ; rank < Gworkers ; ++rtank ) {
         pFreeWorker[nFW] = rank ;
         ++ nFW ;
@@ -569,11 +569,11 @@ void allocFreeWorker(void) {
 }
 
 void freeFreeWorker( void ) {
-	free(pFreeWorker) ;
+    free(pFreeWorker) ;
 }
-	
-void * vScratchJob ;	
-void * vRankJobs ;	
+    
+void * vScratchJob ;    
+void * vRankJobs ;  
 void * vWorkQueue ;
 void * vvWorkQueue ;
 #define WORKQUEUE 1000000
@@ -586,15 +586,15 @@ void allocJobSpace(void) {
     } ;
     struct pScratch = ( struct wJob *) calloc( 1 + Gworkers + WORKQUEUE, sizeof( struct wJob ) ) ;
     vScratchJob = pScratch ;
-	struct wJob * pRankJobs = pScratch + 1 ;
-	vRankJobs = pRankJobs ;
-	struct wJob * pWorkQueue = pRankJobs + Gworkers ;
-	vWorkQueue = pWorkQueue ;
-	vvWorkQueue = pWorkQueue ;
+    struct wJob * pRankJobs = pScratch + 1 ;
+    vRankJobs = pRankJobs ;
+    struct wJob * pWorkQueue = pRankJobs + Gworkers ;
+    vWorkQueue = pWorkQueue ;
+    vvWorkQueue = pWorkQueue ;
 }
 
 void freeJobSpace( void ) {
-	free(vScratchJob) ;
+    free(vScratchJob) ;
 }
 
 void SendRank( rank ) {
@@ -608,17 +608,17 @@ void SendRank( rank ) {
 }
 
 void addFreeWorker( rank ) {
-	pFreeWorker[ nWF ] = rank ;
-	++ nFW ;
+    pFreeWorker[ nWF ] = rank ;
+    ++ nFW ;
 }
 
 int isFreeWorker( void ) {
-	return nFW > 0 ;
+    return nFW > 0 ;
 }
 
 int getFreeWorker( void ) {
-	--nFW ;
-	return pFreeWorker[nFW] ;
+    --nFW ;
+    return pFreeWorker[nFW] ;
 }
 
 void LoadRank( int rank, void * vjob ) {
@@ -645,11 +645,20 @@ void * addQueue( void * vjob ) {
     ++ cWorkQueue ;
     return cWorkQueue - 1 ;
 }
-	
+    
 int isQueueEmpty( void ) {
-	return vWorkQueue == vvWorkQueue ;
+    return vWorkQueue == vvWorkQueue ;
 }
-	
+
+void SendOrQueue( void * vjob ) {
+    if ( isFreeWorker() ) {
+        int rank = getFreeWorker() ;
+        LoadRank( rank, vjob ) ;
+    } else {
+        addQueue( vjob ) ;
+    }
+}
+    
 void getQueue( int rank ) {
     struct wJob {
         uint64_t nPresets ;
@@ -657,86 +666,78 @@ void getQueue( int rank ) {
         uint64_t presets[Gterms-1];
     } ;
     struct wJob * cWorkQueue = vvWorkQueue ;
-	-- cWorkQueue ;
-	LoadRank( rank, cWorkQueue ) ;
+    -- cWorkQueue ;
+    LoadRank( rank, cWorkQueue ) ;
 }
 
 void RootSetup( void ) {
-	// Structure for Job with presets array specified. 
-	// Have to do everything in this routine because C has no nested subroutines. 
+    // Structure for Job with presets array specified. 
+    // Have to do everything in this routine because C has no nested subroutines. 
     struct wJob {
         uint64_t nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
     
-	allocJobSpace() ;
-	allocFreeWorker() ;
-    
+    allocJobSpace() ;
+    allocFreeWorker() ;
+    struct wJob * pRankJobs = vRankJobs ;
+    struct wJob * pScratch = vScratchJob ;
+
     // Add Basic start:
     Gfrom = 2 ;
     Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
     for ( int v = Gto ; v >= Gfrom ; --v ) {
-		if ( nWF > 0 ) {
-			// space in workers
-			int r = pWorkerFree[ nWF-1 ] ;
-			-- nWF ; 
-			pWorkerJob[r].nPresets   = 1 ;
-			pWorkerJob[r].presets[0] = v ;
-			pWorkerJob[r].until      = v ;
-			SendSlot( r ) ;
-		} else {
-			// space in WorkQueue
-			cWorkQueue.nPresets   = 1 ;
-			cWorkQueue.presets[0] = v ;
-			cWorkQueue.until      = v ;
-			++cWorkQueue ;
-		}
+        pScratch.nPresets   = 1 ;
+        pScratch.presets[0] = v ;
+        pScratch.until      = v ;
+        SendOrQueue( pScratch ) ;
     }
     
     // Loop through waiting for results
     do {
         MPI_RECV( &xResponse, 1, Response_t, MPI_ANY_SOURCE, mResponse, MPI_STATUS_IGNORE ) ;
-		int r = xResponse.rank
+        int r = xResponse.rank
         switch( xResponse.status ) {
             case eYes:
             case eNo:
             case eError:
-				// Successful search
+                // Successful search
                 Gcounter += xResponse.count ;
                 if ( cWorkQueue > pWorkQueue ) {
-					// send a pending job back
-					memcpy( pWorkerJob + r, cWorkQueue ) ;
-					-- cWorkQueue ; 
-					SendSlot( r ) ;
-				} else {
-					// Add rank to Free
-					++ nWF ;
-					pWorkerFree[ nWF ] = r ;			
-				}
-				break ;
-			case eTimeout:
-				// Unsuccessful, need to split
-				int np = pWorkerJob[r].nPresets ;
-				struct wJob * pwj = pWorkerJob + r ;
-				if ( np == 0 || pwj.presets[np-1] == pwj.until ) {
-					// Split on next level
-					
-				
+                    // send a pending job back
+                        if ( i != Groot ) {
+            MPI_Send( pJob, 1, Job_t, i, mJob, MPI_COMM_WORLD ) ;
+        }
+    memcpy( pWorkerJob + r, cWorkQueue ) ;
+                    -- cWorkQueue ; 
+                    SendSlot( r ) ;
+                } else {
+                    // Add rank to Free
+                    ++ nWF ;
+                    pWorkerFree[ nWF ] = r ;            
+                }
+                break ;
+            case eTimeout:
+                // Unsuccessful, need to split
+                int np = pWorkerJob[r].nPresets ;
+                struct wJob * pwj = pWorkerJob + r ;
+                if ( np == 0 || pwj.presets[np-1] == pwj.until ) {
+                    // Split on next level
+                    
+                
                 
     
     
     
     // Close
-    free( pJob ) ;
-    free( pWorkQueue ) ;
-    pJob->nPresets = Gterms ; // signal for end
-    for ( int i=0 ; i < Gsize ; ++i ) {
-        if ( i != Groot ) {
-            MPI_Send( pJob, 1, Job_t, i, mJob, MPI_COMM_WORLD ) ;
-        }
+    for ( int rank=0 ; rank < Gworkers ; ++rank ) {
+        pRankJobs.nPresets = Gterms ; // illegal value -- flag for close worker
+        SendRank( rank ) ;
     }
-    
+    freeFreeWorker();
+    freeJobSpace();
+    pJob->nPresets = Gterms ; // signal for end    
 }
 
 int main( int argc, char * argv[] ) {
@@ -756,10 +757,10 @@ int main( int argc, char * argv[] ) {
     WorkerSetup() ; // Send command-line derived parameters to all workers, set up message field sizes
         
     if ( Grank == Groot ) {
-		// root process
+        // root process
         RootSetup() ;
     } else {
-		// worker process (in a loop)
+        // worker process (in a loop)
         do {
         } while ( GetJob() == eYes ) ;
     }
