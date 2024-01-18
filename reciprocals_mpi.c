@@ -615,17 +615,18 @@ void SendRank( rank ) {
 }
 
 void addFreeWorker( rank ) {
-	pWorkerFree[ nWF ] = rank ;
-	++ nWF ;
+	pFreeWorker[ nWF ] = rank ;
+	++ nFW ;
 }
 
 int isFreeWorker( void ) {
-	return nWF > 0 ;
+	return nFW > 0 ;
 }
 
 int getFreeWorker( void ) {
 	--nFW ;
-	return pWorkerFree[n
+	return pFreeWorker[nFW] ;
+}
 
 void RootSetup( void ) {
 	// Structure for Job with presets array specified. 
