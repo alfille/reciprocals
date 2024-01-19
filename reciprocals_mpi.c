@@ -62,7 +62,7 @@ struct sSetup {
 MPI_Datatype Setup_t ;
 
 struct sJob {
-    uint32_t nPresets ;
+    int      nPresets ;
     uint64_t until ;
     uint64_t presets[0] ; // Gterms, actually
 } ;
@@ -140,7 +140,7 @@ void CommunicationSetupPost(void) {
         offsetof(struct sJob, until),
         offsetof(struct sJob, presets)
     } ;
-    MPI_Datatype Job_ts[] = { MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T } ;
+    MPI_Datatype Job_ts[] = { MPI_INT, MPI_UINT64_T, MPI_UINT64_T } ;
     MPI_Type_create_struct( sJob_count, sJob_blocklen, sJob_offset, Job_ts, &Job_t ) ; 
     MPI_Type_commit( &Job_t ) ;
 
@@ -409,12 +409,12 @@ void WorkerSetup( void ) {
     CommunicationSetupPost() ;
 }
 
-search_more GetJob( void ) {
+int GetJob( void ) {
     // For Workers only
     printf("Worker %d waiting\n",Grank);
 //    MPI_Recv( pJob, 1, Job_t, Groot, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
     MPI_Recv( pJob, 1, Job_t, MPI_ANY_SOURCE, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
-    printf("Worker %d got job: nPresets %, until %" PRIu64 "\n\t",Grank,pJob->nPresets,pJob->until);
+    printf("Worker %d got job: nPresets %d, until %" PRIu64 "\n\t",Grank,pJob->nPresets,pJob->until);
     for ( int i=0 ; i<Gterms-1; ++i ) {
 		printf(" %" PRIu64, pJob->presets[i] );
 	}
@@ -423,7 +423,8 @@ search_more GetJob( void ) {
     
     if ( pJob->nPresets == Gterms ) {
         // Trigger for end of run
-        return eNo ;
+        printf("Worker %d told to close.\n",Grank);
+        return 0 ;
     }
     
     // total counter
@@ -434,7 +435,7 @@ search_more GetJob( void ) {
     
     if ( sigsetjmp( Gmark_spot, 1 ) != 0 ) {
         SendResponse( eTimeout ) ;
-        return eYes ;
+        return 1 ;
     }
 
     // Timer handler
@@ -453,7 +454,7 @@ search_more GetJob( void ) {
         } else {
             SendResponse( Range_search( 0, Gfrom, Guntil ) ) ;
         }
-        return eYes ;
+        return 1 ;
 
     } else {
         // Add presets first
@@ -467,7 +468,7 @@ search_more GetJob( void ) {
             }
             if ( Add_preset( index, pJob->presets[i]     ) == eError ) {
                 SendResponse( eError ) ;
-                return eYes ;
+                return 1 ;
             }
         }
 
@@ -484,7 +485,7 @@ search_more GetJob( void ) {
         } else {
             SendResponse( Range_search( index, G[index].val, Guntil ) ) ;
         }
-        return eYes ;
+        return 1 ;
     }
 }        
 
@@ -588,7 +589,7 @@ void * vvWorkQueue ;
 
 void allocJobSpace(void) {
     struct wJob {
-        uint64_t nPresets ;
+        int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
@@ -607,12 +608,13 @@ void freeJobSpace( void ) {
 
 void SendRank( int rank ) {
     struct wJob {
-        uint64_t nPresets ;
+        int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
     struct wJob * pRankJobs = vRankJobs ;
     MPI_Send( pRankJobs + rank, 1, Job_t, rank, mJob, MPI_COMM_WORLD ) ;
+    printf("Root send to rank %d, nPresets=%d\n",rank, pRankJobs[rank].nPresets) ;
 }
 
 void addFreeWorker( int rank ) {
@@ -629,9 +631,9 @@ int getFreeWorker( void ) {
     return pFreeWorker[nFW] ;
 }
 
-void LoadRank( int rank, void * vjob ) {
+void Load_SendRank( int rank, void * vjob ) {
     struct wJob {
-        uint64_t nPresets ;
+        int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
@@ -639,11 +641,12 @@ void LoadRank( int rank, void * vjob ) {
     struct wJob * pjob = vjob ;
     struct wJob * pRankJobs = vRankJobs ;
     memcpy( pRankJobs + rank, vjob, sizeof( struct wJob ) ) ;
+    SendRank( rank ) ;
 }
 
 void * addQueue( void * vjob ) {
     struct wJob {
-        uint64_t nPresets ;
+        int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
@@ -662,7 +665,7 @@ void SendOrQueue( void * vjob ) {
     if ( isFreeWorker() ) {
         int rank = getFreeWorker() ;
         printf("Root send to worker %d\n",rank);
-        LoadRank( rank, vjob ) ;
+        Load_SendRank( rank, vjob ) ;
     } else {
         printf("Root send to queue %d\n",nFW);
         addQueue( vjob ) ;
@@ -671,20 +674,19 @@ void SendOrQueue( void * vjob ) {
     
 void useQueue( int rank ) {
     struct wJob {
-        uint64_t nPresets ;
+        int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
     struct wJob * cWorkQueue = vvWorkQueue ;
     -- cWorkQueue ;
-    LoadRank( rank, cWorkQueue ) ;
-    SendRank( rank ) ;
+    Load_SendRank( rank, cWorkQueue ) ;
 }
 
 void SplitJob( int rank ) {
     //Use xResponse data too
     struct wJob {
-        uint64_t nPresets ;
+        int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
@@ -719,7 +721,7 @@ void RootSetup( void ) {
     // Have to do everything in this routine because C has no nested subroutines. 
 
     struct wJob {
-        uint64_t nPresets ;
+        int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
@@ -766,10 +768,10 @@ void RootSetup( void ) {
     } while ( nFW < Gworkers ) ;
     
     // Close
+    pScratch->nPresets = Gterms ;
     for ( int rank=0 ; rank < Gworkers ; ++rank ) {
 		printf("Root close worker %d \n",rank);
-        pRankJobs->nPresets = Gterms ; // illegal value -- flag for close worker
-        SendRank( rank ) ;
+		Load_SendRank( rank, pScratch ) ;
     }
     freeFreeWorker();
     freeJobSpace();
@@ -798,10 +800,8 @@ int main( int argc, char * argv[] ) {
         RootSetup() ;
     } else {
         // worker process (in a loop)
-        int contnu ;
         do {
-			contnu = GetJob() ;
-        } while ( contnu ) ;
+        } while ( GetJob() ) ;
     }
 
     MPI_Finalize() ;
