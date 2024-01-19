@@ -71,7 +71,7 @@ MPI_Datatype Job_t ;
 
 struct sResponse {
     int      rank ;
-    uint32_t status ;
+    int      status ;
     uint64_t from ;
     uint64_t to ;
     uint64_t count ;
@@ -157,7 +157,7 @@ void CommunicationSetupPost(void) {
         offsetof(struct sResponse, count),
         offsetof(struct sResponse, elapsed)
     } ;
-    MPI_Datatype Response_ts[] = { MPI_INT, MPI_UINT32_T, MPI_UINT64_T, MPI_UINT64_T, MPI_UINT64_T, MPI_DOUBLE } ;
+    MPI_Datatype Response_ts[] = { MPI_INT, MPI_INT, MPI_UINT64_T, MPI_UINT64_T, MPI_UINT64_T, MPI_DOUBLE } ;
     MPI_Type_create_struct( sResponse_count, sResponse_blocklen, sResponse_offset, Response_ts, &Response_t ) ;
     MPI_Type_commit( &Response_t ) ;
 }    
