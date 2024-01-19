@@ -416,28 +416,29 @@ void WorkerSetup( void ) {
     Gsum     = xSetup.sum ;
     Gtimeout = xSetup.timeout ;
 
-    printf("Broadcast rank %d, terms = %" PRIu64 "\n", Grank, Gterms) ;
+    printf("Broadcast rank %d, terms = %d\n", Grank, Gterms) ;
 
     CommunicationSetupPost() ;
 }
 
 int GetJob( void ) {
     // WORKER only
-    printf("Worker %d waiting\n",Grank);
-//    MPI_Recv( pJob, 1, Job_t, Groot, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
+    //printf("Worker %d waiting\n",Grank);
     MPI_Recv( pJob, 1, Job_t, MPI_ANY_SOURCE, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
-    printf("Worker %d got job: nPresets %d, until %" PRIu64 "\n\t",Grank,pJob->nPresets,pJob->until);
-    for ( int i=0 ; i<Gterms-1; ++i ) {
-        printf(" %" PRIu64, pJob->presets[i] );
-    }
-    printf("\n");
-    
     
     if ( pJob->nPresets == Gterms ) {
         // Trigger for end of run
         printf("Worker %d told to close.\n",Grank);
         return 0 ;
     }
+
+    // not death notice
+    printf("Worker %d got job: nPresets %d, \t",Grank,pJob->nPresets);
+    for ( int i=0 ; i<pJob->nPresets ; ++i ) {
+        printf(" %" PRIu64, pJob->presets[i] );
+    }
+    printf(" - %" PRIu64 "\n", pJob->until);
+    
     
     // total counter
     Gcounter = 0 ;
@@ -446,6 +447,7 @@ int GetJob( void ) {
     clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
     
     if ( sigsetjmp( Gmark_spot, 1 ) != 0 ) {
+        printf("Worker %d timeout\n",Grank);
         SendResponse( eTimeout ) ;
         return 1 ;
     }
@@ -475,7 +477,7 @@ int GetJob( void ) {
             ++ index ;
             if ( index == Gterms-2 ) {
                 --index ;
-                fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
+                fprintf(stderr, "Too many preset values -- will only use first %d\n",Gterms-2);
                 Guntil = 0 ;
             }
             if ( Add_preset( index, pJob->presets[i]     ) == eError ) {
@@ -514,7 +516,7 @@ void help() {
     printf("Options\n");
     printf("\t-n%d\t--number\tnumber of terms in the sum (default %d)\n",Gterms,Gterms);
     printf("\t\tAll terms will be of form 1/v and distinct\n");
-    printf("\t-s%d\t--sum\ttarget sum (default %d)\n",Gsum,Gsum);
+    printf("\t-s%" PRIu64 "\t--sum\ttarget sum (default %" PRIu64 ")\n",Gsum,Gsum);
     printf("\t-t\t--timelimit \t stop calculation after specified seconds (default none)\n");
     printf("\t-r\t--range \t increase last preset to this value\n");
     printf("\t-h\t--help\tthis help\n");
@@ -633,7 +635,7 @@ void SendRank( int rank ) {
     } ;
     struct wJob * pRankJobs = vRankJobs ;
     MPI_Send( pRankJobs + rank, 1, Job_t, rank, mJob, MPI_COMM_WORLD ) ;
-    printf("Root send to rank %d, nPresets=%d\n",rank, pRankJobs[rank].nPresets) ;
+    //printf("Root send to rank %d, nPresets=%d\n",rank, pRankJobs[rank].nPresets) ;
 }
 
 void addFreeWorker( int rank ) {
@@ -690,10 +692,10 @@ void SendOrQueue( void * vjob ) {
     // ROOT only
     if ( isFreeWorker() ) {
         int rank = getFreeWorker() ;
-        printf("Root send to worker %d\n",rank);
+        //printf("Root send to worker %d\n",rank);
         Load_SendRank( rank, vjob ) ;
     } else {
-        printf("Root send to queue %d\n",nFW);
+        //printf("Root send to queue %d\n",nFW);
         addQueue( vjob ) ;
     }
 }
@@ -744,7 +746,7 @@ void SplitJob( int rank ) {
     SendOrQueue( pScratch ) ;
 }
 
-void RootSetup( void ) {
+void RootProcess( void ) {
     // ROOT only
     // Structure for Job with presets array specified. 
     // Have to do everything in this routine because C has no nested subroutines. 
@@ -790,8 +792,8 @@ void RootSetup( void ) {
                 break ;
             case eTimeout:
                 // Unsuccessful, need to split
+                printf("Root from rank %d, Split at position %d\n",rank,nFW-1 ) ;
                 SplitJob( rank ) ;
-                printf("Root from rank %d, Split\n",rank,nFW-1 ) ;
                 break ;
         }
     } while ( nFW < Gworkers ) ;
@@ -826,10 +828,13 @@ int main( int argc, char * argv[] ) {
     WorkerSetup() ; // Send command-line derived parameters to all workers, set up message field sizes
         
     if ( Grank == Groot ) {
-        // root process
-        RootSetup() ;
+        // ROOT PROCESS
+        RootProcess() ;
+        printf("\n");
+        printf("Solution = %" PRIu64 "\n", Gcounter );
+        printf("\n");
     } else {
-        // worker process (in a loop)
+        // WORKER PROCESS (in a loop)
         do {
         } while ( GetJob() ) ;
     }
