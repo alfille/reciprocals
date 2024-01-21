@@ -9,7 +9,7 @@
 // Second version (first version in C) -- directly solve last position
 // Third version -- directly solve last 2 positions
 // 4th --last 2 doesn't work, only last
-// 5th more selective use of gcd and use stein's instead
+// 5th more selective use of W_gcd and use stein's instead
 // 6th -- swith to difference rather than sum
 // Update -- add timeout and clean up options
 
@@ -54,12 +54,12 @@
 #include <time.h>
 #include <mpi.h>
 
-struct sSetup {
+struct sParameters {
     uint64_t terms ;
     uint32_t sum ;
     uint32_t timeout ;
-} xSetup ;
-MPI_Datatype Setup_t ;
+} xParameters ;
+MPI_Datatype Parameters_t ;
 
 struct sJob {
     int      nPresets ;
@@ -85,7 +85,7 @@ int        Gterms = 4;
 uint64_t   Gcounter ;
 uint64_t   Gsum = 1 ;
 uint64_t   Guntil = 0 ;
-struct timespec Gtime ;
+struct timespec Gstart ;
 int        Gtimeout = 0 ;
 uint64_t   Gfrom ;
 uint64_t   Gto ;
@@ -94,6 +94,8 @@ int        Gsize ; // MPI size
 int        Groot ;
 int        Gworkers ;
 sigjmp_buf Gmark_spot ;
+double     Gtime_good ;
+double     Gtime_total ;
 
 #define GROOTS 1
 
@@ -109,25 +111,25 @@ typedef enum { eNo = 0, eYes = 1, eError = 2, eTimeout = 3 } search_more ;
 
 typedef enum { mJob, mResponse } mMessage ;
 
-void CommunicationSetupPre(void) {
+void B_ParametersStruct(void) {
     // BOTH ROOT and WORKER
     // Setup before number of terms is known
     // Create the message struct as a defined MPI Datatype
 
     // Setup
-    int sSetup_count = 3 ;
-    int sSetup_blocklen[] = {1,1,1} ;
-    MPI_Aint sSetup_offset[] = {
-        offsetof(struct sSetup, terms),
-        offsetof(struct sSetup, sum),
-        offsetof(struct sSetup, timeout)
+    int sParameters_count = 3 ;
+    int sParameters_blocklen[] = {1,1,1} ;
+    MPI_Aint sParameters_offset[] = {
+        offsetof(struct sParameters, terms),
+        offsetof(struct sParameters, sum),
+        offsetof(struct sParameters, timeout)
     } ;
-    MPI_Datatype Setup_ts[] = { MPI_UINT64_T, MPI_UINT32_T, MPI_UINT32_T } ;
-    MPI_Type_create_struct( sSetup_count, sSetup_blocklen, sSetup_offset, Setup_ts, &Setup_t ) ;
-    MPI_Type_commit( &Setup_t ) ;
+    MPI_Datatype Parameters_ts[] = { MPI_UINT64_T, MPI_UINT32_T, MPI_UINT32_T } ;
+    MPI_Type_create_struct( sParameters_count, sParameters_blocklen, sParameters_offset, Parameters_ts, &Parameters_t ) ;
+    MPI_Type_commit( &Parameters_t ) ;
 }
 
-void CommunicationSetupPost(void) {
+void B_JobStruct(void) {
     // BOTH ROOT and WORKER
     // Setup after number of terms is known
     // Create the message struct as a defined MPI Datatype
@@ -145,7 +147,9 @@ void CommunicationSetupPost(void) {
     MPI_Datatype Job_ts[] = { MPI_INT, MPI_UINT64_T, MPI_UINT64_T } ;
     MPI_Type_create_struct( sJob_count, sJob_blocklen, sJob_offset, Job_ts, &Job_t ) ; 
     MPI_Type_commit( &Job_t ) ;
+}
 
+void B_ResponseStruct(void) {
     // Response
     int sResponse_count = 6 ;
     int sResponse_blocklen[] = {1,1,1,1,1,1} ;
@@ -162,7 +166,29 @@ void CommunicationSetupPost(void) {
     MPI_Type_commit( &Response_t ) ;
 }    
 
-search_more Lastterm( struct fraction * pfrac_old ) {
+void B_CommunicationSetup( void ) {
+    // BOTH ROOT and WORKER
+    // Broadcast parameters to all workers
+    B_ParametersStruct() ; // Doesn't require variable sized presets
+    B_ResponseStruct() ; // Doesn't require variable sized presets
+
+    // Load struct
+    xParameters.terms   = Gterms ;
+    xParameters.sum     = Gsum ;
+    xParameters.timeout = Gtimeout ;
+    
+    MPI_Bcast( &xParameters, 1, Parameters_t, Groot, MPI_COMM_WORLD ) ;
+
+    // Unload Struct
+    Gterms   = xParameters.terms ;
+    Gsum     = xParameters.sum ;
+    Gtimeout = xParameters.timeout ;
+
+    //printf("Broadcast rank %d, terms = %d\n", Grank, Gterms) ;
+    B_JobStruct() ; // Now know Gterms for presets size
+}
+
+search_more W_Lastterm( struct fraction * pfrac_old ) {
     // WORKER ONLY
     // Last fraction -- easier calculation because either it a reciprocal or not. No search required
     // not "summing to one" case
@@ -183,7 +209,7 @@ search_more Lastterm( struct fraction * pfrac_old ) {
     return val != init_val ? eYes : eNo ;
 }
         
-search_more Lastterm_for_1( struct fraction * pfrac_old ) {
+search_more W_Lastterm_for_1( struct fraction * pfrac_old ) {
     // WORKER ONLY
     // Last fraction -- easier calculation because either it a reciprocal or not. No search required
     // Special for "summing to one"
@@ -205,10 +231,10 @@ search_more Lastterm_for_1( struct fraction * pfrac_old ) {
     return val != init_val ? eYes : eNo ; 
 }
 
-uint64_t gcd( uint64_t a, uint64_t b ) {
+uint64_t W_gcd( uint64_t a, uint64_t b ) {
     // WORKER ONLY
-    // calculate gcd
-    // use https://www.geeksforgeeks.org/steins-algorithm-for-finding-gcd/
+    // calculate W_gcd
+    // use https://www.geeksforgeeks.org/steins-algorithm-for-finding-W_gcd/
     int common2s ;
     for ( common2s = 0 ; ((a | b) & 1 ) == 0; ++common2s ) {
         a >>= 1 ;
@@ -232,7 +258,7 @@ uint64_t gcd( uint64_t a, uint64_t b ) {
     return a << common2s ;
 }
         
-search_more Midterm( uint64_t index, struct fraction * pfrac_old ) {
+search_more W_Midterm( uint64_t index, struct fraction * pfrac_old ) {
     // WORKER ONLY
     // Middle fraction -- figure out low start and recursion will signal end
     // Not  "summing to one" case
@@ -242,8 +268,8 @@ search_more Midterm( uint64_t index, struct fraction * pfrac_old ) {
     uint64_t pre_den = pfrac_old->den ;
     
     if ( pre_den > normalize_threshold ) {
-        // calculate gcd
-        uint64_t a = gcd( pre_num, pre_den ) ;
+        // calculate W_gcd
+        uint64_t a = W_gcd( pre_num, pre_den ) ;
         // reduce sum
         pre_num = pre_num / a ;
         pre_den = pre_den / a ;
@@ -266,7 +292,7 @@ search_more Midterm( uint64_t index, struct fraction * pfrac_old ) {
         pfrac_new->den = pre_den * val ;
         pfrac_new->val = val ;
 
-        if ( ((index<Gterms-2)?Midterm( index+1, pfrac_new ):Lastterm(pfrac_new)) == eNo ) {
+        if ( ((index<Gterms-2)?W_Midterm( index+1, pfrac_new ):W_Lastterm(pfrac_new)) == eNo ) {
             return val != init_val ? eYes : eNo ;
         }
 
@@ -274,7 +300,7 @@ search_more Midterm( uint64_t index, struct fraction * pfrac_old ) {
     }
 }
 
-search_more Midterm_for_1( uint64_t index, struct fraction * pfrac_old ) {
+search_more W_Midterm_for_1( uint64_t index, struct fraction * pfrac_old ) {
     // WORKER ONLY
     // Middle fraction -- figure out low start and recursion will signal end
     // Special for "summing to one"
@@ -284,8 +310,8 @@ search_more Midterm_for_1( uint64_t index, struct fraction * pfrac_old ) {
     uint64_t pre_den = pfrac_old->den ;
     
     if ( pre_den > normalize_threshold ) {
-        // calculate gcd
-        uint64_t a = gcd( pre_num, pre_den ) ;
+        // calculate W_gcd
+        uint64_t a = W_gcd( pre_num, pre_den ) ;
         // reduce sum
         pre_num = pre_num / a ;
         pre_den = pre_den / a ;
@@ -306,7 +332,7 @@ search_more Midterm_for_1( uint64_t index, struct fraction * pfrac_old ) {
         pfrac_new->den = pre_den * val ;
         pfrac_new->val = val ;
 
-        if ( ((index<Gterms-2)?Midterm_for_1( index+1, pfrac_new ):Lastterm_for_1(pfrac_new)) == eNo ) {
+        if ( ((index<Gterms-2)?W_Midterm_for_1( index+1, pfrac_new ):W_Lastterm_for_1(pfrac_new)) == eNo ) {
             return val != init_val ? eYes : eNo ;
         }
 
@@ -314,7 +340,7 @@ search_more Midterm_for_1( uint64_t index, struct fraction * pfrac_old ) {
     }
 }
 
-search_more Add_preset( uint64_t index, uint64_t val ) {
+search_more W_Add_preset( uint64_t index, uint64_t val ) {
     // WORKER ONLY
     // add a preset value for timing
     if ( val % Gsum != 0 ) {
@@ -346,7 +372,7 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
         G[index].num -= G[index-1].den ;
         G[index].den = G[index-1].den * val ;
         if ( G[index].den > normalize_threshold ) {
-            uint64_t a = gcd( G[index].num, G[index].den ) ;
+            uint64_t a = W_gcd( G[index].num, G[index].den ) ;
             G[index].num /= a;
             G[index].den /= a;
         }
@@ -356,14 +382,14 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
     return eYes ;
 }
 
-void SendResponse( search_more status ) {
+void W_SendResponse( search_more status ) {
     // WORKER ONLY
     // Clear alarm
     alarm( 0 ) ;
 
     // calc time
     struct timespec now;
-    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &now ) ;
+    clock_gettime( CLOCK_THREAD_CPUTIME_ID, &now ) ;
     
     // Full struct
     xResponse.rank    = Grank ;
@@ -371,18 +397,18 @@ void SendResponse( search_more status ) {
     xResponse.status  = status ;
     xResponse.from    = Gfrom ;
     xResponse.to      = Gto ;
-    xResponse.elapsed = now.tv_sec - Gtime.tv_sec + 10E-9 * ( now.tv_nsec - Gtime.tv_nsec );
+    xResponse.elapsed = (double) (now.tv_sec - Gstart.tv_sec) + 1E-9 * (double) ( now.tv_nsec - Gstart.tv_nsec );
     printf("Worker send rank %d, counter %" PRIu64 ", status %d, from %" PRIu64 ", to %" PRIu64 ",elapsed %g\n",
         xResponse.rank,xResponse.count,xResponse.status,xResponse.from,xResponse.to,xResponse.elapsed);
     MPI_Send( &xResponse, 1, Response_t, Groot, mResponse, MPI_COMM_WORLD ) ;
 }
 
-search_more Range_search( int index, uint64_t from, uint64_t to ) {
+search_more W_Range_search( int index, uint64_t from, uint64_t to ) {
     // WORKER ONLY
     // now run through last preset level
     for ( uint64_t v = from; v < to + Gsum ; v += Gsum ) {
-        Add_preset( index , v ) ;
-        switch ((Gsum==1) ? Midterm_for_1( index+1, &G[index] ) : Midterm( index+1, &G[index] ) ) {
+        W_Add_preset( index , v ) ;
+        switch ((Gsum==1) ? W_Midterm_for_1( index+1, &G[index] ) : W_Midterm( index+1, &G[index] ) ) {
             case eYes:
                 break ;
             case eNo:
@@ -394,99 +420,78 @@ search_more Range_search( int index, uint64_t from, uint64_t to ) {
     return eYes ;
 }
 
-void Timeout_handler( int sig ) {
+void W_Timeout_handler( int sig ) {
     // WORKER ONLY
     siglongjmp( Gmark_spot, -1 ) ;
 }
 
-void WorkerSetup( void ) {
-    // BOTH ROOT and WORKER
-    // Broadcast parameters to all workers
-    CommunicationSetupPre() ;
-
-    // Load struct
-    xSetup.terms   = Gterms ;
-    xSetup.sum     = Gsum ;
-    xSetup.timeout = Gtimeout ;
-    
-    MPI_Bcast( &xSetup, 1, Setup_t, Groot, MPI_COMM_WORLD ) ;
-
-    // Unload Struct
-    Gterms   = xSetup.terms ;
-    Gsum     = xSetup.sum ;
-    Gtimeout = xSetup.timeout ;
-
-    printf("Broadcast rank %d, terms = %d\n", Grank, Gterms) ;
-
-    CommunicationSetupPost() ;
-}
-
-int GetJob( void ) {
+int W_GetJob( void ) {
     // WORKER only
     //printf("Worker %d waiting\n",Grank);
     MPI_Recv( pJob, 1, Job_t, MPI_ANY_SOURCE, mJob, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
     
-    if ( pJob->nPresets == Gterms ) {
-        // Trigger for end of run
-        printf("Worker %d told to close.\n",Grank);
-        return 0 ;
-    }
-
-    // not death notice
-    printf("Worker %d got job: nPresets %d, \t",Grank,pJob->nPresets);
-    for ( int i=0 ; i<pJob->nPresets ; ++i ) {
-        printf(" %" PRIu64, pJob->presets[i] );
-    }
-    printf(" - %" PRIu64 "\n", pJob->until);
-    
-    
+    int nps = pJob->nPresets ;
     // total counter
     Gcounter = 0 ;
 
     // start of elapsed time
-    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
-    
+    clock_gettime( CLOCK_THREAD_CPUTIME_ID, &Gstart ) ;
+
+    if ( nps == Gterms ) {
+        // Trigger for end of run
+        //printf("Worker %d told to close.\n",Grank);
+        return 0 ;
+    }
+
+    // not death notice
+    /*
+    printf("Worker %d got job: nPresets %d, \t",Grank,nps);
+    for ( int i=0 ; i<nps ; ++i ) {
+        printf(" %" PRIu64, pJob->presets[i] );
+    }
+    printf(" - %" PRIu64 "\n", pJob->until);
+    */
     if ( sigsetjmp( Gmark_spot, 1 ) != 0 ) {
-        printf("Worker %d timeout\n",Grank);
-        SendResponse( eTimeout ) ;
+        //printf("Worker %d timeout\n",Grank);
+        W_SendResponse( eTimeout ) ;
         return 1 ;
     }
 
     // Timer handler
-    signal( SIGALRM, Timeout_handler);
+    signal( SIGALRM, W_Timeout_handler);
     alarm( Gtimeout ) ;
 
     
-    if ( pJob->nPresets <= 0) { 
+    if ( nps == 0) { 
         // no presets
         Gfrom = 2 ;
         Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
 
         // Solve
         if ( Guntil == 0 ) {
-            SendResponse( Range_search( 0, Gfrom, Gto ) ) ;
+            W_SendResponse( W_Range_search( 0, Gfrom, Gto ) ) ;
         } else {
-            SendResponse( Range_search( 0, Gfrom, Guntil ) ) ;
+            W_SendResponse( W_Range_search( 0, Gfrom, Guntil ) ) ;
         }
         return 1 ;
-
     } else {
         // Add presets first
+        if (  nps > Gterms-2 ) {
+            // last 2 positions should not be pre set
+            // or timed
+            nps = Gterms - 2 ;
+            alarm(0) ;        int index = -1 ;
+        }
         int index = -1 ;
-        for ( int i = 0; i < pJob->nPresets; ++i) {
+        for ( int i = 0; i < nps; ++i) {
             ++ index ;
-            if ( index == Gterms-2 ) {
-                --index ;
-                fprintf(stderr, "Too many preset values -- will only use first %d\n",Gterms-2);
-                Guntil = 0 ;
-            }
-            if ( Add_preset( index, pJob->presets[i]     ) == eError ) {
-                SendResponse( eError ) ;
+            if ( W_Add_preset( index, pJob->presets[i] ) == eError ) {
+                W_SendResponse( eError ) ;
                 return 1 ;
             }
         }
 
-        // estimage range of next level after presets
+        // estimate range of next level after presets
         Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
         if ( Gfrom < G[index].val + Gsum ) {
             Gfrom = G[index].val + Gsum ;
@@ -495,15 +500,15 @@ int GetJob( void ) {
 
         // Solve
         if ( Guntil < G[index].val ) {
-            SendResponse( Range_search( index, G[index].val, G[index].val ) );
+            W_SendResponse( W_Range_search( index, G[index].val, G[index].val ) );
         } else {
-            SendResponse( Range_search( index, G[index].val, Guntil ) ) ;
+            W_SendResponse( W_Range_search( index, G[index].val, Guntil ) ) ;
         }
         return 1 ;
     }
 }        
 
-void help() {
+void R_help() {
     // ROOT only
     printf("Reciprocals -- find sequences of integers where reciprocals sum to 1 (e.g. [2,3,6])\n");
     printf("\tShows all solution sequences of a given length\n");
@@ -519,7 +524,7 @@ void help() {
     printf("\t-s%" PRIu64 "\t--sum\ttarget sum (default %" PRIu64 ")\n",Gsum,Gsum);
     printf("\t-t\t--timelimit \t stop calculation after specified seconds (default none)\n");
     printf("\t-r\t--range \t increase last preset to this value\n");
-    printf("\t-h\t--help\tthis help\n");
+    printf("\t-h\t--R_help\tthis R_help\n");
     printf("\nSee https://github.com/alfille/reciprocals for full exposition\n\n");
     exit(1);
 }
@@ -530,11 +535,11 @@ struct option long_options[] =
     {"sum"      ,   required_argument, 0, 's'},
     {"timelimit",   required_argument, 0, 't'},       
     {"range"    ,   required_argument, 0, 'r'},       
-    {"help"     ,   no_argument,       0, 'h'},
+    {"R_help"     ,   no_argument,       0, 'h'},
     {0          ,   0          ,       0,   0}
 };
 
-void ParseCommandLine( int argc, char * argv[] ) {
+void R_ParseCommandLine( int argc, char * argv[] ) {
     // ROOT only
     // defaults
     Gsum = 1 ;
@@ -548,7 +553,7 @@ void ParseCommandLine( int argc, char * argv[] ) {
             case 0:
                 break ;
             case 'h':
-                help();
+                R_help();
                 break ;
             case 'n':
                 Gterms = (uint64_t) atoi(optarg);
@@ -563,7 +568,7 @@ void ParseCommandLine( int argc, char * argv[] ) {
                 Gtimeout = atoi(optarg);
                 break ;
             default:
-                help() ;
+                R_help() ;
                 break ;
             }
     }
@@ -584,7 +589,7 @@ void * vWorkerJob ;
 int * pFreeWorker ;
 int nFW ;
 
-void allocFreeWorker(void) {
+void R_allocFreeWorker(void) {
     // ROOT only
     nFW = 0 ;
     pFreeWorker = calloc( Gworkers, sizeof( int ) ) ;
@@ -594,7 +599,7 @@ void allocFreeWorker(void) {
     }
 }
 
-void freeFreeWorker( void ) {
+void R_freeFreeWorker( void ) {
     // ROOT only
     free(pFreeWorker) ;
 }
@@ -602,31 +607,31 @@ void freeFreeWorker( void ) {
 void * vScratchJob ;    
 void * vRankJobs ;  
 void * vWorkQueue ;
-void * vvWorkQueue ;
-#define WORKQUEUE 1000000
+int    nWQ ;
+#define WORKQUEUE_MAX 1000000
 
-void allocJobSpace(void) {
+void R_allocJobSpace(void) {
     // ROOT only
     struct wJob {
         int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
-    struct wJob * pScratch = ( struct wJob *) calloc( 1 + Gworkers + WORKQUEUE, sizeof( struct wJob ) ) ;
+    struct wJob * pScratch = ( struct wJob *) calloc( 1 + Gworkers + WORKQUEUE_MAX, sizeof( struct wJob ) ) ;
     vScratchJob = pScratch ;
     struct wJob * pRankJobs = pScratch + 1 ;
     vRankJobs = pRankJobs ;
     struct wJob * pWorkQueue = pRankJobs + Gworkers ;
     vWorkQueue = pWorkQueue ;
-    vvWorkQueue = pWorkQueue ;
+    nWQ = 0 ;
 }
 
-void freeJobSpace( void ) {
+void R_freeJobSpace( void ) {
     // ROOT only
     free(vScratchJob) ;
 }
 
-void SendRank( int rank ) {
+void R_SendRank( int rank ) {
     // ROOT only
     struct wJob {
         int      nPresets ;
@@ -638,24 +643,19 @@ void SendRank( int rank ) {
     //printf("Root send to rank %d, nPresets=%d\n",rank, pRankJobs[rank].nPresets) ;
 }
 
-void addFreeWorker( int rank ) {
+void R_addFreeWorker( int rank ) {
     // ROOT only
     pFreeWorker[ nFW ] = rank ;
     ++ nFW ;
 }
 
-int isFreeWorker( void ) {
-    // ROOT only
-    return nFW > 0 ;
-}
-
-int getFreeWorker( void ) {
+int R_getFreeWorker( void ) {
     // ROOT only
     --nFW ;
     return pFreeWorker[nFW] ;
 }
 
-void Load_SendRank( int rank, void * vjob ) {
+void R_Load_SendRank( int rank, void * vjob ) {
     // ROOT only
     struct wJob {
         int      nPresets ;
@@ -666,53 +666,55 @@ void Load_SendRank( int rank, void * vjob ) {
     struct wJob * pjob = vjob ;
     struct wJob * pRankJobs = vRankJobs ;
     memcpy( pRankJobs + rank, vjob, sizeof( struct wJob ) ) ;
-    SendRank( rank ) ;
+    R_SendRank( rank ) ;
 }
 
-void * addQueue( void * vjob ) {
+void R_addQueue( void * vjob ) {
+    //printf("Add to QUEUE\n");
     // ROOT only
     struct wJob {
         int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
+    
     struct wJob * pjob = vjob ;
-    struct wJob * cWorkQueue = vvWorkQueue ;
-    memcpy( cWorkQueue, vjob, sizeof( struct wJob ) ) ;
-    ++ cWorkQueue ;
-    return cWorkQueue - 1 ;
+    struct wJob * pWorkQueue = vWorkQueue ;
+    
+    if ( nWQ >= WORKQUEUE_MAX ) {
+        fprintf(stderr, "Max out work que -- too many pending jobs.(>%d)\n",WORKQUEUE_MAX);
+        exit(1) ;
+    }
+    memcpy( pWorkQueue + nWQ, vjob, sizeof( struct wJob ) ) ;
+    ++ nWQ ; ;
 }
     
-int isQueueEmpty( void ) {
+void R_SendOrQueue( void * vjob ) {
     // ROOT only
-    return vWorkQueue == vvWorkQueue ;
-}
-
-void SendOrQueue( void * vjob ) {
-    // ROOT only
-    if ( isFreeWorker() ) {
-        int rank = getFreeWorker() ;
+    if ( nFW > 0 ) {
+        int rank = R_getFreeWorker() ;
         //printf("Root send to worker %d\n",rank);
-        Load_SendRank( rank, vjob ) ;
+        R_Load_SendRank( rank, vjob ) ;
     } else {
         //printf("Root send to queue %d\n",nFW);
-        addQueue( vjob ) ;
+        R_addQueue( vjob ) ;
     }
 }
     
-void useQueue( int rank ) {
+void R_useQueue( int rank ) {
+    //printf("Get From QUEUE\n");
     // ROOT only
     struct wJob {
         int      nPresets ;
         uint64_t until ;
         uint64_t presets[Gterms-1];
     } ;
-    struct wJob * cWorkQueue = vvWorkQueue ;
-    -- cWorkQueue ;
-    Load_SendRank( rank, cWorkQueue ) ;
+    struct wJob * pWorkQueue = vWorkQueue ;
+    -- nWQ ;
+    R_Load_SendRank( rank, pWorkQueue + nWQ ) ;
 }
 
-void SplitJob( int rank ) {
+void R_SplitJob( int rank ) {
     // ROOT only
     //Use xResponse data too
     struct wJob {
@@ -727,26 +729,57 @@ void SplitJob( int rank ) {
     
     if ( nps > 0 && pR->until != pR->presets[nps-1] ) {
         // This level splittable
-        printf("Root from rank %d, Split this level %d\n",rank,nps-1);
+        //printf("Root from rank %d, Split THIS level %d\n",rank,nps-1);
         memcpy( pScratch, pR, sizeof( struct wJob ) ) ;
-        pR->presets[nps-1] += Gsum ;
-        SendRank( rank ) ;
         pScratch->until = pScratch->presets[nps-1] ;
+        pR->presets[nps-1] += Gsum ;
+        R_SendRank( rank ) ;
     } else {
         // Split next level
-        printf("Root from rank %d, Split next level %d\n",rank,nps);
+        //printf("Root from rank %d, Split NEXT level %d\n",rank,nps);
         ++ pR->nPresets ;
         memcpy( pScratch, pR, sizeof( struct wJob ) ) ;
         pR->presets[nps] = xResponse.from + Gsum ;
         pR->until = xResponse.to ;
-        SendRank( rank ) ;
+        R_SendRank( rank ) ;
         pScratch->presets[nps] = xResponse.from ;
         pScratch->until = xResponse.from ;
     }
-    SendOrQueue( pScratch ) ;
+    /*
+    printf("\tSplit: Same: ");
+    for ( int i = 0 ; i < pR->nPresets ; ++i ) {
+        printf("%" PRIu64 " ", pR->presets[i] ) ;
+    }
+    printf(" - %" PRIu64 "\n",pR->until ) ;
+    printf("\tSplit: Plus: ");
+    for ( int i = 0 ; i < pScratch->nPresets ; ++i ) {
+        printf("%" PRIu64 " ", pScratch->presets[i] ) ;
+    }
+    printf(" - %" PRIu64 "\n",pScratch->until ) ;
+    */
+    
+    R_SendOrQueue( pScratch ) ;
 }
 
-void RootProcess( void ) {
+void R_CloseAll( void ) {
+    // ROOT only
+    struct wJob {
+        int      nPresets ;
+        uint64_t until ;
+        uint64_t presets[Gterms-1];
+    } ;
+    struct wJob * pScratch = vScratchJob ;
+    // Close
+    pScratch->nPresets = Gterms ;
+    for ( int rank=0 ; rank < Gworkers ; ++rank ) {
+        //printf("Root close worker %d \n",rank);
+        R_Load_SendRank( rank, pScratch ) ;
+    }
+    R_freeFreeWorker();
+    R_freeJobSpace();
+}
+
+void R_Process( void ) {
     // ROOT only
     // Structure for Job with presets array specified. 
     // Have to do everything in this routine because C has no nested subroutines. 
@@ -757,8 +790,8 @@ void RootProcess( void ) {
         uint64_t presets[Gterms-1];
     } ;
     
-    allocJobSpace() ;
-    allocFreeWorker() ;
+    R_allocJobSpace() ;
+    R_allocFreeWorker() ;
     struct wJob * pRankJobs = vRankJobs ;
     struct wJob * pScratch = vScratchJob ;
 
@@ -769,44 +802,41 @@ void RootProcess( void ) {
         pScratch->nPresets   = 1 ;
         pScratch->presets[0] = v ;
         pScratch->until      = v ;
-        SendOrQueue( pScratch ) ;
+        R_SendOrQueue( pScratch ) ;
     }
     
     // Loop through waiting for results
     do {
         MPI_Recv( &xResponse, 1, Response_t, MPI_ANY_SOURCE, mResponse, MPI_COMM_WORLD, MPI_STATUS_IGNORE ) ;
         int rank = xResponse.rank ;
+        Gtime_total += xResponse.elapsed ;
         switch( xResponse.status ) {
             case eYes:
             case eNo:
             case eError:
                 // Successful search
                 Gcounter += xResponse.count ;
-                if ( isQueueEmpty() ) {
-                    printf("Root from rank %d, Add Free Worker\n",rank ) ;
-                    addFreeWorker( rank ) ;
+                Gtime_good += xResponse.elapsed ;
+                printf( "Counter %" PRIu64 ", Workers: %d, Pending Jobs: %d, Time efficiency %4.2f%%\n", Gcounter, Gworkers-nFW, nWQ, 100.* Gtime_good / Gtime_total);
+                if ( nWQ == 0 ) {
+                    // nothing in work queue to assign, so leave worker unused
+                    //printf("Root from rank %d, Add Free Worker\n",rank ) ;
+                    R_addFreeWorker( rank ) ;
                 } else {
-                    printf("Root from rank %d, Use Queue %d\n",rank,nFW-1 ) ;
-                    useQueue( rank ) ;
+                    // pull a task from the work queue
+                    //printf("Root from rank %d, Use Queue %d\n",rank,nWQ ) ;
+                    R_useQueue( rank ) ;
                 }
                 break ;
             case eTimeout:
                 // Unsuccessful, need to split
-                printf("Root from rank %d, Split at position %d\n",rank,nFW-1 ) ;
-                SplitJob( rank ) ;
+                //printf("Root from rank %d, Timeout -> Split\n",rank ) ;
+                R_SplitJob( rank ) ;
                 break ;
         }
     } while ( nFW < Gworkers ) ;
-    
-    // Close
-    pScratch->nPresets = Gterms ;
-    for ( int rank=0 ; rank < Gworkers ; ++rank ) {
-        printf("Root close worker %d \n",rank);
-        Load_SendRank( rank, pScratch ) ;
-    }
-    freeFreeWorker();
-    freeJobSpace();
-    pJob->nPresets = Gterms ; // signal for end    
+
+    R_CloseAll() ;
 }
 
 int main( int argc, char * argv[] ) {
@@ -820,23 +850,23 @@ int main( int argc, char * argv[] ) {
 
     if ( Grank==Groot ) {
         // MASTER
-        ParseCommandLine( argc, argv ) ;
+        R_ParseCommandLine( argc, argv ) ;
         printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
         printf("MPI size=%d, Workers=%d, Root is %d\n",Gsize,Gworkers,Groot);
    }
     
-    WorkerSetup() ; // Send command-line derived parameters to all workers, set up message field sizes
+    B_CommunicationSetup() ; // Send command-line derived parameters to all workers, set up message field sizes
         
     if ( Grank == Groot ) {
         // ROOT PROCESS
-        RootProcess() ;
+        R_Process() ;
         printf("\n");
         printf("Solution = %" PRIu64 "\n", Gcounter );
         printf("\n");
     } else {
         // WORKER PROCESS (in a loop)
         do {
-        } while ( GetJob() ) ;
+        } while ( W_GetJob() ) ;
     }
 
     MPI_Finalize() ;

@@ -254,13 +254,13 @@ search_more Add_preset( uint64_t index, uint64_t val ) {
 }
 
 void SendResponse( search_more status ) {
-	// Clear alarm
-	alarm( 0 ) ;
+    // Clear alarm
+    alarm( 0 ) ;
 
     // calc time
     struct timespec now;
     clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &now ) ;
-    double elapsed = now.tv_sec - Gtime.tv_sec + 10E-9 * ( now.tv_nsec - Gtime.tv_nsec );
+    double elapsed = now.tv_sec - Gtime.tv_sec + 1E-9 * ( now.tv_nsec - Gtime.tv_nsec );
     
     // print results
     switch ( status ) {
@@ -296,72 +296,72 @@ search_more Range_search( int index, uint64_t from, uint64_t to ) {
 }
 
 void Timeout_handler( int sig ) {
-	siglongjmp( Gmark_spot, -1 ) ;
+    siglongjmp( Gmark_spot, -1 ) ;
 }
 
 void DoJob( int nPresets, char * presets[] ) {
-	// For Workers only
-	
-	// total counter
-	Gcounter = 0 ;
+    // For Workers only
+    
+    // total counter
+    Gcounter = 0 ;
 
-	// start of elapsed time
-	clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
-	
-	if ( sigsetjmp( Gmark_spot, 1 ) != 0 ) {
-		SendResponse( eTimeout ) ;
-		return ;
-	}
+    // start of elapsed time
+    clock_gettime( CLOCK_PROCESS_CPUTIME_ID, &Gtime ) ;
+    
+    if ( sigsetjmp( Gmark_spot, 1 ) != 0 ) {
+        SendResponse( eTimeout ) ;
+        return ;
+    }
 
-	// Timer handler
-	signal( SIGALRM, Timeout_handler);
-	alarm( Gtimeout ) ;
+    // Timer handler
+    signal( SIGALRM, Timeout_handler);
+    alarm( Gtimeout ) ;
 
-	
-	if ( nPresets <= 0) { 
-		// no presets
-		Gfrom = 2 ;
-		Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
+    
+    if ( nPresets <= 0) { 
+        // no presets
+        Gfrom = 2 ;
+        Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms) / (exp(Gsum)-1) ) ) ;
 
-		// Solve
-		if ( Guntil == 0 ) {
-			SendResponse( Range_search( 0, Gfrom, Gto ) ) ;
-		} else {
-			SendResponse( Range_search( 0, Gfrom, Guntil ) ) ;
-		}
-		return ;
+        // Solve
+        if ( Guntil == 0 ) {
+            SendResponse( Range_search( 0, Gfrom, Gto ) ) ;
+        } else {
+            SendResponse( Range_search( 0, Gfrom, Guntil ) ) ;
+        }
+        return ;
 
-	} else {
-		// Add presets first
-		int index = -1 ;
-		for ( int i = 0; i < nPresets; ++i) {
-			++ index ;
-			if ( index == Gterms-2 ) {
-				--index ;
-				fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
-				Guntil = 0 ;
-			}
-			if ( Add_preset( index, atoll(presets[i]) ) == eError ) {
-				SendResponse( eError ) ;
-				return ;
-			}
-		}
+    } else {
+        // Add presets first
+        int index = -1 ;
+        for ( int i = 0; i < nPresets; ++i) {
+            ++ index ;
+            if ( index == Gterms-2 ) {
+                --index ;
+                fprintf(stderr, "Too many preset values -- will only use first %" PRIu64 "\n",Gterms-2);
+                Guntil = 0 ;
+            }
+            if ( Add_preset( index, atoll(presets[i]) ) == eError ) {
+                SendResponse( eError ) ;
+                return ;
+            }
+        }
 
-		// estimage range of next level after presets
-		Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
-		if ( Gfrom < G[index].val + Gsum ) {
-			Gfrom = G[index].val + Gsum ;
-		}
-		Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
+        // estimage range of next level after presets
+        Gfrom = ( G[index].den / ( Gsum * G[index].num)) * Gsum + Gsum ;
+        if ( Gfrom < G[index].val + Gsum ) {
+            Gfrom = G[index].val + Gsum ;
+        }
+        Gto = Gsum * ( (uint64_t) ( 1.1 + (Gterms-index-1) / (exp(((double) Gsum * G[index].num)/(G[index].den))-1) ) );
 
-		// Solve
-		if ( Guntil < G[index].val ) {
-			SendResponse( Range_search( index, G[index].val, G[index].val ) );
-		} else {
-			SendResponse( Range_search( index, G[index].val, Guntil ) ) ;
-		}
-		return ;
-	}
+        // Solve
+        if ( Guntil < G[index].val ) {
+            SendResponse( Range_search( index, G[index].val, G[index].val ) );
+        } else {
+            SendResponse( Range_search( index, G[index].val, Guntil ) ) ;
+        }
+        return ;
+    }
 }        
 
 void help() {
@@ -443,11 +443,11 @@ void ParseCommandLine( int argc, char * argv[] ) {
     if ( Gsum < 1 ) {
         Gsum = 1 ;
     }
-}	
+}   
 
 int main( int argc, char * argv[] ) {
 
-	ParseCommandLine( argc, argv ) ;
+    ParseCommandLine( argc, argv ) ;
 
     printf("Find sets of %d unique reciprocals that sum to %" PRIu64 "\n", Gterms, Gsum );
 
