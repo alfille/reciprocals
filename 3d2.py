@@ -12,8 +12,12 @@ import sys
 
 class Data:
     def __init__(self,filename):
-        self.df = pd.read_csv(filename, names=['Diff','Terms_left','Denominator','Count'],header=None)
-        print(self.df.head())
+        df = pd.read_csv(filename, names=['Diff','Terms_left','Denominator','Count','Last'],header=None)
+        self.df = {}
+        self.tl = list(set(df['Terms_left']))
+        for tl in self.tl:
+            self.df[tl] = df[df['Terms_left']==tl]
+            print(self.df[tl].head())
     
     def colorset( self, r_df ):
         # return color,handles
@@ -23,67 +27,78 @@ class Data:
         return ( colors, handles )
         
     def threeD( self) :
-        self.threeD_1()
+        for tl in self.tl:
+            self.threeD_1(tl)
 
     def twoD( self ):
-        self.diff_den()
-        self.diff_den2()
+        for tl in self.tl:
+            self.diff_den(tl)
+            self.diff_den2(tl)
 
-    def threeD_1( self ):
+    def threeD_1( self,tl ):
         X = 'Diff'
         Y = 'Denominator'
         Z = 'Count'
         R = 'Terms_left'
+        S = 'Last'
 
-        x = self.df[X]
-        y = self.df[Y]
-        z = self.df[Z]
-        r = self.df[R]
+        x = self.df[tl][X]
+        y = self.df[tl][Y]
+        z = self.df[tl][Z]
+        r = self.df[tl][R]
+        s = self.df[tl][S]
 
-        colors, handles = self.colorset( r )
+        colors, handles = self.colorset( s )
 
         threedee = plt.figure().add_subplot(projection='3d')
         threedee.scatter( x.apply(np.log), y, z.apply(np.log), c=colors )
         threedee.set_xlabel(X)
         threedee.set_ylabel(Y)
         threedee.set_zlabel(Z)
-        plt.legend(handles=handles, title=R)
+        plt.legend(handles=handles, title=S)
+        plt.title( f"Terms Left {tl}")
         plt.show()
 
-    def diff_den( self ):
+    def diff_den( self,tl ):
         X = 'Diff'
         Y = 'Denominator'
         R = 'Terms_left'
+        S = 'Last'
 
-        x = self.df[X]
-        y = self.df[Y]
-        r = self.df[R]
+        x = self.df[tl][X]
+        y = self.df[tl][Y]
+        r = self.df[tl][R]
+        s = self.df[tl][S]
 
-        colors, handles = self.colorset( r )
+        colors, handles = self.colorset( s )
 
         #threedee = plt.figure()
         ax=plt.scatter( x.apply(np.log), y, c=colors )
         #ax.set_xlabel(X)
         #ax.set_ylabel(Y)
-        plt.legend(handles=handles, title=R)
+        plt.legend(handles=handles, title=S)
+        plt.title( f"Terms Left {tl}")
         plt.show()
 
-    def diff_den2( self ):
+    def diff_den2( self,tl ):
         X = 'Diff'
         Y = 'Denominator'
         R = 'Terms_left'
+        S = 'Last'
 
-        x = self.df[X]
-        y = self.df[Y]
-        r = self.df[R]
+        x = self.df[tl][X]
+        y = self.df[tl][Y]
+        r = self.df[tl][R]
+        s = self.df[tl][S]
 
-        colors, handles = self.colorset( r )
+        colors, handles = self.colorset( s )
 
         #threedee = plt.figure()
         ax=plt.scatter( x.apply(np.log), y.apply(np.log), c=colors )
         #ax.set_xlabel(X)
         #ax.set_ylabel(Y)
-        plt.legend(handles=handles, title=R)
+        plt.legend(handles=handles, title=S)
+        plt.title( f"Terms Left {tl}")
         plt.show()
 
 
@@ -113,7 +128,7 @@ def main( sysargs ):
         )
         
     args=parser.parse_args()
-    print(sysargs,args)
+    #print(sysargs,args)
 
     dataset = Data(args.csv)
 
