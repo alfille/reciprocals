@@ -43,7 +43,7 @@ class Data:
         colors, handles = self.colorset( r )
 
         threedee = plt.figure().add_subplot(projection='3d')
-        threedee.scatter( x.apply(np.log), y, z.apply(np.log), c=colors )
+        threedee.scatter( x.apply(lambda x: x), y.apply(lambda y: 1/y), z.apply(lambda z: np.log10(z)), c=colors )
         threedee.set_xlabel(X)
         threedee.set_ylabel(Y)
         threedee.set_zlabel(Z)

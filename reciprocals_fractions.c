@@ -183,6 +183,7 @@ search_more Midterm( uint64_t index, struct fraction * pfrac_old ) {
         pfrac_new->num = pre_num * val - pre_den ;
         pfrac_new->den = pre_den * val ;
         pfrac_new->val = val ;
+        pfrac_new->count = 0 ;
 
         if ( ((index<Gterms-2)?Midterm( index+1, pfrac_new ):Lastterm(pfrac_new)) == eNo ) {
             PrintCSV( index ) ;
