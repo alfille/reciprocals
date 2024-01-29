@@ -266,13 +266,13 @@ uint64_t W_gcd( uint64_t a, uint64_t b ) {
 }
         
 void W_PrintCSV( uint64_t index ) {
-    if ( index < Gterms-3 && G[index].count > 0 ) {
+    if ( index < Gterms-2 && G[index].count > 0 ) {
         printf( "%g,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n", ((double)G[index].num)/((double)G[index].den), Gterms-index-1, G[index].val, G[index].count, G[index-1].val ) ;
     }
 }
         
 void W_PrintCSV_TO( uint64_t index ) {
-    if ( index < Gterms-3 && G[index].count > 0 ) {
+    if ( index < Gterms-2 && G[index].count > 0 ) {
         printf( "%g,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 "\n", ((double)G[index].num)/((double)G[index].den), Gterms-index-1, G[index].val, 10000000, G[index-1].val ) ;
     }
 }

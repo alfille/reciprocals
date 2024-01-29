@@ -12,7 +12,7 @@ import sys
 
 class Data:
     def __init__(self,filename):
-        self.df = pd.read_csv(filename, names=['Diff','Terms_left','Denominator','Count'],header=None)
+        self.df = pd.read_csv(filename, names=['Diff','Terms_left','Denominator','Count',"Last"],header=None)
         print(self.df.head())
     
     def colorset( self, r_df ):
@@ -34,6 +34,7 @@ class Data:
         Y = 'Denominator'
         Z = 'Count'
         R = 'Terms_left'
+        S = "Last"
 
         x = self.df[X]
         y = self.df[Y]
@@ -52,8 +53,9 @@ class Data:
 
     def diff_den( self ):
         X = 'Diff'
-        Y = 'Denominator'
+        Y = 'Count'
         R = 'Terms_left'
+        S = "Last"
 
         x = self.df[X]
         y = self.df[Y]
@@ -62,16 +64,17 @@ class Data:
         colors, handles = self.colorset( r )
 
         #threedee = plt.figure()
-        ax=plt.scatter( x.apply(np.log), y, c=colors )
+        ax=plt.scatter( x.apply(np.log10), y.apply(np.log10), c=colors )
         #ax.set_xlabel(X)
         #ax.set_ylabel(Y)
         plt.legend(handles=handles, title=R)
         plt.show()
 
     def diff_den2( self ):
-        X = 'Diff'
-        Y = 'Denominator'
+        X = 'Denominator'
+        Y = 'Count'
         R = 'Terms_left'
+        S = "Last"
 
         x = self.df[X]
         y = self.df[Y]
@@ -80,7 +83,7 @@ class Data:
         colors, handles = self.colorset( r )
 
         #threedee = plt.figure()
-        ax=plt.scatter( x.apply(np.log), y.apply(np.log), c=colors )
+        ax=plt.scatter( x.apply(lambda x: 1./x), y.apply(np.log10), c=colors )
         #ax.set_xlabel(X)
         #ax.set_ylabel(Y)
         plt.legend(handles=handles, title=R)
